@@ -1,0 +1,3 @@
+function SingleConeStimulusGenerator(singleConeStimuli)
+    
+end
