@@ -1,2 +1,2 @@
 # chris-package
-Collections of Rieke Lab symphony proctols
+Collections of Rieke Lab symphony protocols
