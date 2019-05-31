@@ -1,9 +1,0 @@
-function lookup = coneTypeColorLookup()
-    types = {'s', 'm', 'l', 'unknown'};
-    colors = {'blue', ...
-        'green', ...
-        'red', ...
-        'black'};
-    
-    lookup = containers.Map(types, colors);
-end
