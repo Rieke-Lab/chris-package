@@ -13,6 +13,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         stimTime=2000
         tailTime=1000
         downSample=1
+        naturalImageContrastScale=0.6
         imgName='img031'
         psth=true
         amp
@@ -160,7 +161,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         function [img] = normImg(obj,img,meanIntensity)
             img=double(img);
             img=img/max(img(:));
-            img=0.6*(img-mean(img(:)))/mean(img(:)); % contrast image
+            img=obj.naturalImageContrastScale*(img-mean(img(:)))/mean(img(:)); % contrast image
             img=img*meanIntensity+ meanIntensity;
             img=img*255;
             
