@@ -26,14 +26,14 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
             obj.barWidth=ip.Results.barWidth;
             obj.variableFlashTimes=ip.Results.variableFlashTimes;
             obj.colorstr=ip.Results.coloredBy;
-            if isvector(obj.colorstr)
-                obj.colorstr=cellstr(string(obj.colorstr));
-            end
+%             if isvector(obj.colorstr)
+%                 obj.colorstr=cellstr(string(obj.colorstr));
+%             end
             
             for i=1:length(obj.barWidth)
                 for j=1:length(obj.colorstr) % number of color groups in each plot
                     for k=1:length(obj.variableFlashTimes)
-                        obj.resp.trace(i,j,k)=0;   % create the globle variable to store the mean response,
+                        obj.resp.trace{i,j,k}=0;   % create the globle variable to store the mean response,
                         obj.resp.count(i,j,k)=0;
                     end
                 end
@@ -61,14 +61,15 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 for j=1:length(obj.colorstr)
                     for k=1:length(obj.variableFlashTimes)
                         obj.lineHandle(i,j,k)=line(0,0,'Parent', obj.axesHandle(i), ...,
-                            'Colors',colors(j,:),'marker','none','linestyle','-');
+                            'Color',colors(j,:),'marker','none','linestyle','-');
                         if k==1
-                            linesForLegends=[lineForLegends obj.lineHandle(i,j,1)];
+                            linesForLegends=[linesForLegends obj.lineHandle(i,j,1)];
                         end
                     end
                 end
                 % for each subplot, add legend, weel this is not a neat code
-               legend(linesForLegends,obj.colorstr); legend boxoff;
+%                legend(linesForLegends,obj.colorstr); legend boxoff;
+              legend(linesForLegends,''); legend boxoff;
             end
         end
         
@@ -83,29 +84,31 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 pattern=epoch.parameters('currentPattern');
             elseif length(obj.colorstr)==2
                 pattern=epoch.parameters('currentPhase');
-                pattern=string(pattern) . % translte the doulbe into string 
+%                 pattern=string(pattern); % translte the doulbe into string 
             end
             %%%%%%%%%%%
-            response = epoch.getResponse(obj.ampDevice);
-            epochResponseTrace = response.getData();
+            response = epoch.getResponse(obj.device);
+            [epochResponseTrace,~] = response.getData();
             sampleRate = response.sampleRate.quantityInBaseUnits;
             x = (1:numel(epochResponseTrace)) / sampleRate;
+            y=epochResponseTrace;
             if obj.psth
                 sigma = 10e-3 * sampleRate;
                 filter = normpdf(1:10*sigma, 10*sigma/2, sigma);
                 results = edu.washington.riekelab.util.spikeDetectorOnline(epochResponseTrace, [], sampleRate);
-                y = zeros(size(results));
+                y = zeros(size(epochResponseTrace));
                 y(results.sp) = 1;
                 y = sampleRate * conv(y, filter, 'same');
             end
+            size(y)
             %%%% sort each epoch accordingly
             delayIndex=find(currentDelay== obj.variableFlashTimes);
             barIndex=find(currentBarWidth==obj.barWidth);
             patternIndex=find(obj.colorstr==pattern);
-
+            
             obj.resp.count(barIndex,patternIndex,delayIndex)=obj.resp.count(barIndex,patternIndex,delayIndex)+1;
-            obj.resp.trace(barIndex,patternIndex,delayIndex)=obj.resp.trace(barIndex,patternIndex,delayIndex)+y;
-            set(obj.lineHandle(barIndex,patternIndex,delayIndex),'XData',x,'YData', obj.resp.trace(barIndex,patternIndex,delayIndex)./ ...,
+            obj.resp.trace{barIndex,patternIndex,delayIndex}=obj.resp.trace{barIndex,patternIndex,delayIndex}+y;
+            set(obj.lineHandle(barIndex,patternIndex,delayIndex),'XData',x,'YData', obj.resp.trace{barIndex,patternIndex,delayIndex}./ ...,
                 obj.resp.count(barIndex,patternIndex,delayIndex));  
         end
     end
