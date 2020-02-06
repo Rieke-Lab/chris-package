@@ -7,12 +7,12 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         variableFlashTime=[50 100 200 400]
         adaptaContrast=0.5
         testContrast=0.5
-        meanIntensity=0.2
+        meanIntensity=0.15
         preTime=1000
         stimTime=2000
         tailTime=1000
         zeroMean=false
-        downSample=2
+        downSample=4
     end
     
     properties(Hidden)
@@ -22,6 +22,9 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         currentPhase
         flashTimes
         phases=[0 180]
+        startMatrix
+        adaptMatrix
+        testMatrix
     end
     
     methods
@@ -35,9 +38,9 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             %%%%%%%%% need a new online analysis figure later
-            obj.showFigure('edu.washington.riekelab.turner.figures.spatialAdaptFigure',...
-                obj.rig.getDevice(obj.amp),'groupBy',{'currentPattern'},'barWidth',obj.barWidth,'variableFlashTimes',obj.flashTimes, ...
-                'psth',obj.psth,'coloredBy',obj.phases);
+            obj.showFigure('edu.washington.riekelab.chris.figures.spatialAdaptFigure',...
+                obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.flashTimes, ...
+                'psth',obj.psth,'coloredBy',obj.phases);         
             
             if obj.testContrast<0 && obj.zeroMean
                 obj.testContrast=-((1-obj.adaptContrast)/2);  % this push positive stripes back to mean intensity,
@@ -50,14 +53,15 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
-            phaseIndex = mod(obj.numEpochsCompleted,2)+1;   % 3 because there are 2 different phase
-            flashIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,2))/2,legnth(obj.variableFlashTime))+1;
+            phaseIndex = mod(obj.numEpochsCompleted,length(obj.phases))+1;   % 3 because there are 2 different phase
+            flashIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)))/length(obj.phases),legnth(obj.variableFlashTime))+1;
             obj.currentFlashDelay=obj.variableFlashTime(flashIndex);
             obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
                 obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime];
-            barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,2*obj.variableFlashTime))/(2*obj.variableFlashTime),length(obj.barWidth))+1;
+            barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)*obj.variableFlashTime))  ...,
+                /(length(obj.phases)*obj.variableFlashTime),length(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
-            
+                                                                                                                                                                                                                                                                        
             % create matrix for adapting and flashing
             obj.adaptMatrix.base=createGrateMat(obj.meanIntensity,0,0,'seesaw');
             if obj.zeroMean
@@ -89,8 +93,8 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
             
-            startMatrix=uint8(obj.adaptMatrix.base);
-            scene=stage.builtin.stimuli.Image(startMatrix);
+            obj.startMatrix=uint8(obj.startMatrix);
+            scene=stage.builtin.stimuli.Image(obj.startMatrix);
             scene.size = [apertureDiameterPix  apertureDiameterPix]; %scale up to canvas size
             scene.position=canvasSize/2;
             % Use linear interpolation when scaling the image.
@@ -148,15 +152,15 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
                 sinewave2D(sinewave2D>0)=1;
                 sinewave2D(sinewave2D<=0)=-1;
             end
-            sinewave2D=(1+sinewave2D*contrast)*meanIntensity*255;
+            sinewave2D=(1+sinewave2D*contrast) *meanIntensity*255;
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < 3*length(obj.barWidth)*length(obj.variableFlashTime);
+            tf = obj.numEpochsPrepared < length(obj.phases)*length(obj.barWidth)*length(obj.variableFlashTime);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < 3*length(obj.barWidth)*length(obj.variableFlashTime);
+            tf = obj.numEpochsCompleted < length(obj.phases)*length(obj.barWidth)*length(obj.variableFlashTime);
         end
         
     end

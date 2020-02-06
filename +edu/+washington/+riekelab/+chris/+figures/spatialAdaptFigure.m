@@ -1,7 +1,6 @@
 classdef spatialAdaptFigure < symphonyui.core.FigureHandler
     properties (SetAccess = private)
         device
-        groupBy
         barWidth
         variableFlashTimes
         psth
@@ -16,7 +15,6 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
         function obj = spatialAdaptFigure(device, varargin)
             
             ip = inputParser();
-            ip.addParameter('groupBy', [], @(x)iscellstr(x));
             ip.addParameter('psth', false, @(x)islogical(x));
             ip.addParameter('barWidth', [], @(x)isvector(x));
             ip.addParameter('variableFlashTimes', [], @(x)isvector(x));
@@ -24,7 +22,6 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
             ip.parse(varargin{:});
             
             obj.device = device;
-            obj.groupBy = ip.Results.groupBy;
             obj.psth = ip.Results.psth;
             obj.barWidth=ip.Results.barWidth;
             obj.variableFlashTimes=ip.Results.variableFlashTimes;
