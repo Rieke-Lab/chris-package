@@ -72,13 +72,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             else
                 obj.adaptMatrix.test=obj.createGrateMat(obj.meanIntensity*(1+obj.adaptContrast),obj.adaptContrast/(1+obj.adaptContrast),0,'seesaw');
             end
-            switch phaseIndex
-                case 1
-                    obj.currentPhase=0;
-                    
-                case 2
-                    obj.currentPhase=180;
-            end
+            obj.currentPhase=obj.phases(phaseIndex);
             obj.testMatrix.base=obj.createGrateMat(0,1,obj.currentPhase,'seesaw');  % this create the test grating
             obj.testMatrix.test=obj.createGrateMat(obj.meanIntensity*obj.testContrast,1, obj.currentPhase,'seesaw');  % this create the test grating
             obj.startMatrix=uint8(obj.adaptMatrix.base+obj.testMatrix.base);
@@ -126,7 +120,6 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         
         
         function [imgMat] = getImgMatrix(obj,time)
-            disp('1')
             if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
                 adaptMat=obj.adaptMatrix.base;
             else
@@ -143,23 +136,21 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
                 error('img matrix intensity out of range');
             end
             imgMat=uint8(imgMat);
-
         end
         
         
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
             apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
             apertureDiameterPix=ceil(apertureDiameterPix/obj.downSample);
-            currentBarWidthPix=ceil(obj.currentBarWidth/obj.downSample);
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth)/obj.downSample);
             [x,~] = meshgrid(linspace(-pi,pi,apertureDiameterPix));
             numCycles=apertureDiameterPix/(2*currentBarWidthPix);
-            sinewave2D =sin(numCycles*(x-phase/180*pi));
+            sinewave2D =sin(numCycles*(x)-phase/180*pi);
             if strcmp(mode,'seesaw')
                 sinewave2D(sinewave2D>0)=1;
                 sinewave2D(sinewave2D<=0)=-1;
             end
             sinewave2D=(1+sinewave2D*contrast) *meanIntensity*255;
-
         end
         
         function tf = shouldContinuePreparingEpochs(obj)

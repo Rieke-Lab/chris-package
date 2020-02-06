@@ -26,9 +26,9 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
             obj.barWidth=ip.Results.barWidth;
             obj.variableFlashTimes=ip.Results.variableFlashTimes;
             obj.colorstr=ip.Results.coloredBy;
-%             if isvector(obj.colorstr)
-%                 obj.colorstr=cellstr(string(obj.colorstr));
-%             end
+            %             if isvector(obj.colorstr)
+            %                 obj.colorstr=cellstr(string(obj.colorstr));
+            %             end
             
             for i=1:length(obj.barWidth)
                 for j=1:length(obj.colorstr) % number of color groups in each plot
@@ -68,8 +68,8 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                     end
                 end
                 % for each subplot, add legend, weel this is not a neat code
-%                legend(linesForLegends,obj.colorstr); legend boxoff;
-              legend(linesForLegends,''); legend boxoff;
+                %                legend(linesForLegends,obj.colorstr); legend boxoff;
+                legend(linesForLegends,''); legend boxoff;
             end
         end
         
@@ -80,12 +80,22 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
             
             currentDelay=epoch.parameters('currentFlashDelay');
             currentBarWidth=epoch.parameters('currentBarWidth');
+            delayIndex=find(currentDelay== obj.variableFlashTimes);
+            barIndex=find(currentBarWidth==obj.barWidth);
             if length(obj.colorstr)==3
                 pattern=epoch.parameters('currentPattern');
+                IndexC = strfind(obj.colorstr,pattern);
+                patternIndex = find(not(cellfun('isempty',IndexC)));
+                
             elseif length(obj.colorstr)==2
                 pattern=epoch.parameters('currentPhase');
-%                 pattern=string(pattern); % translte the doulbe into string 
+                patternIndex=find(obj.colorstr==pattern);
+                %                 pattern=string(pattern); % translte the doulbe into string
             end
+            
+            %%%% sort each epoch accordingly
+            
+            
             %%%%%%%%%%%
             response = epoch.getResponse(obj.device);
             [epochResponseTrace,~] = response.getData();
@@ -100,16 +110,12 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 y(results.sp) = 1;
                 y = sampleRate * conv(y, filter, 'same');
             end
-            size(y)
-            %%%% sort each epoch accordingly
-            delayIndex=find(currentDelay== obj.variableFlashTimes);
-            barIndex=find(currentBarWidth==obj.barWidth);
-            patternIndex=find(obj.colorstr==pattern);
+            
             
             obj.resp.count(barIndex,patternIndex,delayIndex)=obj.resp.count(barIndex,patternIndex,delayIndex)+1;
             obj.resp.trace{barIndex,patternIndex,delayIndex}=obj.resp.trace{barIndex,patternIndex,delayIndex}+y;
             set(obj.lineHandle(barIndex,patternIndex,delayIndex),'XData',x,'YData', obj.resp.trace{barIndex,patternIndex,delayIndex}./ ...,
-                obj.resp.count(barIndex,patternIndex,delayIndex));  
+                obj.resp.count(barIndex,patternIndex,delayIndex));
         end
     end
 end
