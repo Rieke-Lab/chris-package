@@ -27,7 +27,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         currentFlashDelay
         currentPattern
         imgNameType=symphonyui.core.PropertyType('char','row',{'img031','img032','img046','img058','img080'});
-        imgMatDir='C:\Users\Public\Documents\chris-package\+edu\+washington\+riekelab\+chris\+rescource\subjectTrajectory';
+        imgMatDir='C:\Users\Fred Rieke\Documents\chris-package\+edu\+washington\+riekelab\+chris\+resources\subjectTrajectory';
         flashTimes
         patterns={'spot','grating','patch'}
         testMatrix
@@ -50,8 +50,10 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             picture=imgData.information.picture;
             patchLocs=floor(imgData.information.patchToAdapt.fixLocs);
             apertureDiameterPix=2*floor(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);  % transform to pix
-            obj.patchAdapt=picture(patchLocs(1)-apertureDiameterPix/2:obj.downSample:patchLocs(1)+apertureDiameterPix/2, ...,
-                patchLocs(2)-apertureDiameterPix/2:obj.downSample:patchLocs(2)+apertureDiameterPix/2);
+            apertureDiameterPix=floor(apertureDiameterPix/obj.downSample);
+            
+            obj.patchAdapt=picture(patchLocs(1)-apertureDiameterPix/2:obj.downSample:patchLocs(1)+apertureDiameterPix/2-1, ...,
+                patchLocs(2)-apertureDiameterPix/2:obj.downSample:patchLocs(2)+apertureDiameterPix/2-1);
             obj.patchAdapt=obj.patchAdapt';
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
@@ -68,14 +70,14 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
-            stimTypeIndex = mod(obj.numEpochsCompleted,length(obj.patterns))+1  % 3 because there are 3 different patterns
+            stimTypeIndex = mod(obj.numEpochsCompleted,length(obj.patterns))+1;  % 3 because there are 3 different patterns
             flashIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.patterns)))/length(obj.patterns), ...,
                 length(obj.variableFlashTime))+1;
             obj.currentFlashDelay=obj.variableFlashTime(flashIndex);
             obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
                 obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime];
-            barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.patterns)*obj.variableFlashTime)) ...,
-                /(length(obj.patterns)*obj.variableFlashTime),length(obj.barWidth))+1;
+            barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.patterns)*length(obj.variableFlashTime))) ...,
+                /(length(obj.patterns)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
             switch stimTypeIndex
                 case 1
@@ -90,13 +92,11 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
                     obj.currentPattern='patch';
                     obj.adaptMatrix.base=obj.normImg(obj.patchAdapt,obj.backgroundIntensity);
                     obj.adaptMatrix.step=obj.normImg(obj.patchAdapt,obj.stepIntensity);
-                    size(obj.adaptMatrix.base)
             end
             
             obj.testMatrix.base=obj.createGrateMat(obj.backgroundIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
             obj.testMatrix.step=obj.createGrateMat(obj.stepIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
             obj.startMatrix=uint8(obj.adaptMatrix.base);
-            size(obj.testMatrix.base)
             % there are three experimenatl parameters manipulated. the
             % arrangement change pattern, flashDelay, then bar width, the order
             % can be switched accordingly.
@@ -118,7 +118,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             scene.setMinFunction(GL.LINEAR);
             scene.setMagFunction(GL.LINEAR);
             p.addStimulus(scene);
-                  
+            
             sceneController = stage.builtin.controllers.PropertyController(scene, 'imageMatrix',...
                 @(state) obj.getImgMatrix( state.time));
             p.addController(sceneController);
@@ -169,8 +169,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
             apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
-            apertureDiameterPix=ceil(apertureDiameterPix/obj.downSample);
-            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth)/obj.downSample);
+            apertureDiameterPix=floor(apertureDiameterPix/obj.downSample);
+            currentBarWidthPix=floor(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth)/obj.downSample);
             [x,~] = meshgrid(linspace(-pi,pi,apertureDiameterPix));
             numCycles=apertureDiameterPix/(2*currentBarWidthPix);
             sinewave2D =sin(numCycles*(x)-phase/180*pi);

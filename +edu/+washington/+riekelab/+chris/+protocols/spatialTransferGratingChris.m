@@ -62,7 +62,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
                 obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime];
             barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)*length(obj.variableFlashTime)))  ...,
-                /(length(obj.phases)*length(obj.variableFlashTime)),length(obj.barWidth))+1
+                /(length(obj.phases)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
                                                                                                                                                                                                                                                                         
             % create matrix for adapting and flashing
