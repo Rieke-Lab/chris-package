@@ -88,7 +88,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         
         function p=createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
+            apertureDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
                
@@ -140,12 +140,10 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         
         
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
-            apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
-            apertureDiameterPix=ceil(apertureDiameterPix/obj.downSample);
-            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth)/obj.downSample);
-            [x,~] = meshgrid(linspace(-pi,pi,apertureDiameterPix));
-            numCycles=apertureDiameterPix/(2*currentBarWidthPix);
-            sinewave2D =sin(numCycles*(x)-phase/180*pi);
+            apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+            x =pi*meshgrid(linspace(-apertureDiameterPix/2,apertureDiameterPix/2,apertureDiameterPix/obj.downSample));
+            sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')
                 sinewave2D(sinewave2D>0)=1;
                 sinewave2D(sinewave2D<=0)=-1;

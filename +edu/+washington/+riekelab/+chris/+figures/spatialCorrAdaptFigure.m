@@ -3,8 +3,8 @@ classdef spatialCorrAdaptFigure< symphonyui.core.FigureHandler
     properties (SetAccess = private)
         ampDevice
         psth
-        preTime
-        tailTime
+        flashTimes
+        flashDuration
         baseTime
     end
     
@@ -12,7 +12,6 @@ classdef spatialCorrAdaptFigure< symphonyui.core.FigureHandler
         axesHandle
         lineHandle
         allEpochResponses
-        baselines
         allSpaCorrs
         allEpochRatios
         summaryData
@@ -24,14 +23,14 @@ classdef spatialCorrAdaptFigure< symphonyui.core.FigureHandler
             obj.ampDevice = ampDevice;
             ip = inputParser();
             ip.addParameter('psth', [], @(x)islogical(x));
-            ip.addParameter('preTime', [], @(x)isvector(x));
-            ip.addParameter('tailTime', [], @(x)isvector(x));
-            ip.addParameter('baseTime', [], @(x)isvector(x));
+            ip.addParameter('flashDuration', [], @(x)isnumeric(x));
+            ip.addParameter('flashTimes', [], @(x)isvector(x));
+            ip.addParameter('baseTime', [], @(x)isnumeric(x));
             ip.parse(varargin{:});
             obj.psth = ip.Results.psth;
-            obj.preTime = ip.Results.preTime;
-            obj.tailTime = ip.Results.tailTime;
-            obj.baseTime=ip.Results.baseTime;
+            obj.flashDuration = 10000*ip.Results.flashDuration/1000;
+            obj.baseTime = 10000*ip.Results.baseTime/1000;
+            obj.flashTimes = 10000*ip.Results.flashTimes/1000;
             obj.createUi();
         end
         
@@ -55,34 +54,23 @@ classdef spatialCorrAdaptFigure< symphonyui.core.FigureHandler
             epochResponseTrace = response.getData();
             sampleRate = response.sampleRate.quantityInBaseUnits;
             currentSpatialCorr= epoch.parameters('currentSpatialCorr');
-            prePts = sampleRate*obj.preTime/1000;
-            tailPts = sampleRate*obj.tailTime/1000;
-            basePts=sampleRate*obj.baseTime/1000;
-            preScaleFactor = tailPts / prePts;
-            
-            epochResponseTrace = epochResponseTrace([1:prePts, end-tailPts:end]);
-           
-            if obj.psth  %spike recording
-                %count spikes
-                S = edu.washington.riekelab.turner.utils.spikeDetectorOnline(epochResponseTrace);
-                trace=S.sp;
-            else 
-                trace=epochResponseTrace;
-      
+            trace=epochResponseTrace;
+            if obj.psth
+                sigma = 10e-3 * sampleRate;
+                filter = normpdf(1:10*sigma, 10*sigma/2, sigma);
+                results = edu.washington.riekelab.util.spikeDetectorOnline(epochResponseTrace, [], sampleRate);
+                trace = zeros(size(epochResponseTrace));
+                trace(results.sp) = 1;
+                trace = sampleRate * conv(trace, filter, 'same');
             end
-  
-
-            newEpochResponse = (sum(trace > prePts)- (tailPts/basePts)*sum(trace < basePts));  %spike count during stim
-            newBaseline =(preScaleFactor * (sum(trace < prePts)-(prePts/basePts)*sum(trace < basePts))); %spike count before stim, scaled by length
-            
-            newRatio= newEpochResponse/newBaseline;
-            if newBaseline<0.1
-                newRatio=0;
+            if ~isempty(trace)
+                trace=trace-mean(trace(1:obj.baseTime));
+                newRatio= max(abs(trace(obj.flashTimes(2):obj.flashTimes(2)+obj.flashDuration+500)))./ ...,
+                    max(abs(trace(obj.flashTimes(1):obj.flashTimes(1)+obj.flashDuration+500)));
+                
+                obj.allSpaCorrs =cat(1,obj.allSpaCorrs, currentSpatialCorr);
+                obj.allEpochRatios = cat(1,obj.allEpochRatios,newRatio);
             end
-            
-            obj.allSpaCorrs =cat(1,obj.allSpaCorrs, currentSpatialCorr);
-            obj.allEpochRatios = cat(1,obj.allEpochRatios,newRatio);
-            
             
             obj.summaryData.spaCorr = unique(obj.allSpaCorrs);  % sorted ascendingly
             obj.summaryData.meanRatios = zeros(size(obj.summaryData.spaCorr));

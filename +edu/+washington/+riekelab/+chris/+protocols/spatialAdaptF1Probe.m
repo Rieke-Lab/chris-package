@@ -12,7 +12,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         preTime=1000
         stimTime=2000
         tailTime=1000
-        downSample=1
+        downSample=4
         naturalImageContrastScale=0.6
         imgName='img031'
         psth=true
@@ -49,11 +49,11 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             imgData=load(fullfile(obj.imgMatDir, obj.imgName));
             picture=imgData.information.picture;
             patchLocs=floor(imgData.information.patchToAdapt.fixLocs);
-            apertureDiameterPix=2*floor(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);  % transform to pix
-            apertureDiameterPix=floor(apertureDiameterPix/obj.downSample);
+            apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix
             
-            obj.patchAdapt=picture(patchLocs(1)-apertureDiameterPix/2:obj.downSample:patchLocs(1)+apertureDiameterPix/2-1, ...,
-                patchLocs(2)-apertureDiameterPix/2:obj.downSample:patchLocs(2)+apertureDiameterPix/2-1);
+            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/(2*6.6)):patchLocs(1)+round(apertureDiameterPix/(2*6.6)), ...,
+                patchLocs(2)-round(apertureDiameterPix/(2*6.6)):patchLocs(2)+round(apertureDiameterPix/(2*6.6)));
+            obj.patchAdapt=imresize(obj.patchAdapt, apertureDiameterPix/(size(obj.patchAdapt,1)*obj.downSample),'nearest');
             obj.patchAdapt=obj.patchAdapt';
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
@@ -93,9 +93,11 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
                     obj.adaptMatrix.base=obj.normImg(obj.patchAdapt,obj.backgroundIntensity);
                     obj.adaptMatrix.step=obj.normImg(obj.patchAdapt,obj.stepIntensity);
             end
-            
             obj.testMatrix.base=obj.createGrateMat(obj.backgroundIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
             obj.testMatrix.step=obj.createGrateMat(obj.stepIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
+            size(obj.adaptMatrix.base)
+            size(obj.testMatrix.base)
+            
             obj.startMatrix=uint8(obj.adaptMatrix.base);
             % there are three experimenatl parameters manipulated. the
             % arrangement change pattern, flashDelay, then bar width, the order
@@ -107,7 +109,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         
         function p=createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
+            apertureDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.backgroundIntensity); % Set background intensity
             
@@ -167,19 +169,16 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             
         end
         
+        
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
-            apertureDiameterPix = 2*round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter)/2);
-            apertureDiameterPix=floor(apertureDiameterPix/obj.downSample);
-            currentBarWidthPix=floor(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth)/obj.downSample);
-            [x,~] = meshgrid(linspace(-pi,pi,apertureDiameterPix));
-            numCycles=apertureDiameterPix/(2*currentBarWidthPix);
-            sinewave2D =sin(numCycles*(x)-phase/180*pi);
+            apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+            x =pi*meshgrid(linspace(-apertureDiameterPix/2,apertureDiameterPix/2,apertureDiameterPix/obj.downSample));
+            sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')
-                sinewave2D(sinewave2D>0)=1;
-                sinewave2D(sinewave2D<=0)=-1;
+                sinewave2D=sign(sinewave2D);
             end
-            sinewave2D=(1+sinewave2D*contrast)*meanIntensity*255;
-            
+            sinewave2D=(1+sinewave2D*contrast) *meanIntensity*255;
         end
         
         function tf = shouldContinuePreparingEpochs(obj)

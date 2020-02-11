@@ -26,10 +26,13 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
             obj.barWidth=ip.Results.barWidth;
             obj.variableFlashTimes=ip.Results.variableFlashTimes;
             obj.colorstr=ip.Results.coloredBy;
-            %             if isvector(obj.colorstr)
-            %                 obj.colorstr=cellstr(string(obj.colorstr));
-            %             end
+            if ~iscellstr(obj.colorstr)
+                obj.colorstr=strsplit(num2str(obj.colorstr));
+            end
             
+            if ~iscellstr(obj.colorstr)
+                obj.colorstr=strsplit(num2str(obj.colorstr));
+            end
             for i=1:length(obj.barWidth)
                 for j=1:length(obj.colorstr) % number of color groups in each plot
                     for k=1:length(obj.variableFlashTimes)
@@ -50,7 +53,7 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                     'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'), ...
                     'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
                     'XTickMode', 'auto');
-                title(obj.axesHandle(i),strcat('barWidth ',' ', num2str(obj.barWidth)));
+                title(obj.axesHandle(i),strcat('barWidth ',' ', num2str(obj.barWidth(i))));
                 xlabel(obj.axesHandle(i), 'Time (sec)');
                 if obj.psth
                     ylabel(obj.axesHandle(i), 'spikeRate(Hz)');
@@ -68,8 +71,8 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                     end
                 end
                 % for each subplot, add legend, weel this is not a neat code
-                %                legend(linesForLegends,obj.colorstr); legend boxoff;
-                legend(linesForLegends,''); legend boxoff;
+                legend(linesForLegends,obj.colorstr); legend boxoff;
+                
             end
         end
         
@@ -88,9 +91,8 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 patternIndex = find(not(cellfun('isempty',IndexC)));
                 
             elseif length(obj.colorstr)==2
-                pattern=epoch.parameters('currentPhase');
-                patternIndex=find(obj.colorstr==pattern);
-                %                 pattern=string(pattern); % translte the doulbe into string
+                pattern=num2str(epoch.parameters('currentPhase'));
+                patternIndex=find(strcmp(obj.colorstr,pattern));
             end
             
             %%%% sort each epoch accordingly
