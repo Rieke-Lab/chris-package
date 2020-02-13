@@ -46,7 +46,8 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
         
         function createUi(obj)
             import appbox.*;
-            colors = edu.washington.riekelab.turner.utils.pmkmp(length(obj.colorstr),'CubicYF');
+%             colors = edu.washington.riekelab.turner.utils.pmkmp(length(obj.colorstr),'CubicYF');
+            colors=[0 0 0; 1 0 0; 0 0 1];
             for i=1:length(obj.barWidth)
                 obj.axesHandle(i) = subplot(length(obj.barWidth),1,i, ...
                     'Parent', obj.figureHandle, ...
@@ -64,7 +65,7 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 for j=1:length(obj.colorstr)
                     for k=1:length(obj.variableFlashTimes)
                         obj.lineHandle(i,j,k)=line(0,0,'Parent', obj.axesHandle(i), ...,
-                            'Color',colors(j,:),'marker','none','linestyle','-');
+                            'Color',colors(j,:),'marker','none','linestyle','-','linewidth',1.5);
                         if k==1
                             linesForLegends=[linesForLegends obj.lineHandle(i,j,1)];
                         end
