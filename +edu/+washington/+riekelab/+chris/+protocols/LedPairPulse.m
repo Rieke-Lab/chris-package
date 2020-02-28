@@ -5,11 +5,10 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
     properties
         led                             % Output LED
         preTime = 100                    % Pulse leading duration (ms)
-        stimTime = 1500                  % Pulse duration (ms)
+        pulseDuration=20                  % Pulse duration (ms)
         tailTime = 400                  % Pulse trailing duration (ms)
         intervalFamily = [50 100 200 400 800 1200]   % ms interval of pairs
         pulseIntensity=0.05  % pulse amplitude (V or norm. [0-1] depending on LED units)
-        pulseDuration=20     % ms
         meanIntensity = 0.2                  % Pulse and LED background mean (V or norm. [0-1] depending on LED units)
         numberOfAverages = uint16(3)      % Number of reps in family
         interpulseInterval = 0          % Duration between pulses (s)
@@ -65,7 +64,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         function [stim] = createLedStimulus(obj,pulseNum)          
             gen = symphonyui.builtin.stimuli.PulseTrainGenerator(); 
             gen.preTime = obj.preTime;
-            gen.stimTime = obj.stimTime;
+            gen.pulseTime = obj.pulseDuration;
             gen.tailTime = obj.tailTime;
             gen.amplitude = obj.pulseIntensity;
             gen.mean = obj.meanIntensity;
