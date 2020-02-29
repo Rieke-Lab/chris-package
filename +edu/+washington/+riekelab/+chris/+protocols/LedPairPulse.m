@@ -1,6 +1,6 @@
 classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
-    % Presents families of rectangular pulse stimuli to a specified LED and records responses from a specified 
-    % amplifier paired led 
+    % Presents families of rectangular pulse stimuli to a specified LED and records responses from a specified
+    % amplifier paired led
     
     properties
         led                             % Output LED
@@ -12,13 +12,14 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         meanIntensity = 0.2                  % Pulse and LED background mean (V or norm. [0-1] depending on LED units)
         numberOfAverages = uint16(3)      % Number of reps in family
         interpulseInterval = 0          % Duration between pulses (s)
+        psth=true
         amp                             % Input amplifier
     end
     
     properties (Dependent, SetAccess = private)
         amp2                            % Secondary amplifier
     end
- 
+    
     properties (Hidden)
         ledType
         ampType
@@ -28,7 +29,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
     methods
         
         function didSetRig(obj)
-            didSetRig@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);        
+            didSetRig@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
             [obj.led, obj.ledType] = obj.createDeviceNamesProperty('LED');
             [obj.amp, obj.ampType] = obj.createDeviceNamesProperty('Amp');
         end
@@ -53,16 +54,18 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
-            
-                 obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-                obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
-                    'groupBy', {'currentInterval'});
+            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
+            obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
+                'groupBy', {'currentInterval'},'psth',obj.psth);
+            obj.showFigure('edu.washington.riekelab.chris.figures.pairPulseFigure', ...
+                obj.rig.getDevice(obj.amp),'psth',obj.psth,...
+                'preTime',obj.preTime,'pulseTime',obj.pulseDuration);
             device = obj.rig.getDevice(obj.led);
             device.background = symphonyui.core.Measurement(obj.meanIntensity, device.background.displayUnits);
         end
         
-        function [stim] = createLedStimulus(obj,pulseNum)          
-            gen = symphonyui.builtin.stimuli.PulseTrainGenerator(); 
+        function [stim] = createLedStimulus(obj,pulseNum)
+            gen = symphonyui.builtin.stimuli.PulseTrainGenerator();
             gen.preTime = obj.preTime;
             gen.pulseTime = obj.pulseDuration;
             gen.tailTime = obj.tailTime;
@@ -71,10 +74,10 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
             gen.sampleRate = obj.sampleRate;
             gen.units = obj.rig.getDevice(obj.led).background.displayUnits;
             gen.intervalTime=obj.intervalFamily(pulseNum);
-            gen.numPulses=2;    
+            gen.numPulses=2;
             stim = gen.generate();
         end
-     
+        
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, epoch);
             
@@ -85,7 +88,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
             epoch.addStimulus(obj.rig.getDevice(obj.led), stim);
             epoch.addResponse(obj.rig.getDevice(obj.amp));
         end
-           
+        
         function prepareInterval(obj, interval)
             prepareInterval@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, interval);
             
