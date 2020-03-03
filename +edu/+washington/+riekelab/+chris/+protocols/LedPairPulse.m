@@ -23,9 +23,8 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         ampType
         currentInterval
     end
-    properties (Dependent, SetAccess = private)
-        amp2                            % Secondary amplifier
-    end
+
+    
     methods
         
         function didSetRig(obj)
@@ -36,10 +35,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         
         function d = getPropertyDescriptor(obj, name)
             d = getPropertyDescriptor@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, name);
-            
-            if  strncmp(name, 'amp2', 4) && numel(obj.rig.getDeviceNames('Amp')) < 2
-                d.isHidden = true;
-            end
+         
         end
         
         function p = getPreview(obj, panel)
