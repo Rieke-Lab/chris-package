@@ -155,7 +155,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             end
             imgMat=adaptMat+testMat;
             if max(imgMat(:))>255 || min(imgMat(:))<0
-                error(['img matrix intensity out of range' 'max ', num2str(max(imgMat(:)))]);
+                disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
+                error('img matrix intensity out of range');
             end
             imgMat=uint8(imgMat);
         end
@@ -173,7 +174,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-            x =pi*meshgrid(linspace(-apertureDiameterPix/2,apertureDiameterPix/2,apertureDiameterPix/obj.downSample));
+            x =pi*meshgrid(linspace(-apertureDiameterPix/2,apertureDiameterPix/2,size(obj.patchAdapt,1)));
             sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')
                 sinewave2D=sign(sinewave2D);

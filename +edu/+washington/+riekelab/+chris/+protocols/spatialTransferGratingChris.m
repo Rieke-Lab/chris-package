@@ -133,6 +133,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             end
             imgMat=adaptMat+testMat;
             if max(imgMat(:))>255 || min(imgMat(:))<0
+                disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
                 error('img matrix intensity out of range');
             end
             imgMat=uint8(imgMat);

@@ -4,9 +4,9 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
     
     properties
         led                             % Output LED
-        preTime = 100                    % Pulse leading duration (ms)
-        pulseDuration=20                  % Pulse duration (ms)
-        tailTime = 400                  % Pulse trailing duration (ms)
+        preTime = 500                    % Pulse leading duration (ms)
+        pulseDuration=20                % Pulse duration (ms)
+        tailTime = 2000                  % Pulse trailing duration (ms)
         intervalFamily = [50 100 200 400 800 1200]   % ms interval of pairs
         pulseIntensity=0.05  % pulse amplitude (V or norm. [0-1] depending on LED units)
         meanIntensity = 0.2                  % Pulse and LED background mean (V or norm. [0-1] depending on LED units)
@@ -16,16 +16,16 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         amp                             % Input amplifier
     end
     
-    properties (Dependent, SetAccess = private)
-        amp2                            % Secondary amplifier
-    end
+    
     
     properties (Hidden)
         ledType
         ampType
         currentInterval
     end
-    
+    properties (Dependent, SetAccess = private)
+        amp2                            % Secondary amplifier
+    end
     methods
         
         function didSetRig(obj)
@@ -37,7 +37,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         function d = getPropertyDescriptor(obj, name)
             d = getPropertyDescriptor@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, name);
             
-            if strncmp(name, 'amp2', 4) && numel(obj.rig.getDeviceNames('Amp')) < 2
+            if  strncmp(name, 'amp2', 4) && numel(obj.rig.getDeviceNames('Amp')) < 2
                 d.isHidden = true;
             end
         end
@@ -55,7 +55,7 @@ classdef LedPairPulse < edu.washington.riekelab.protocols.RiekeLabProtocol
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
+            obj.showFigure('edu.washington.riekelab.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
                 'groupBy', {'currentInterval'},'psth',obj.psth);
             obj.showFigure('edu.washington.riekelab.chris.figures.pairPulseFigure', ...
                 obj.rig.getDevice(obj.amp),'psth',obj.psth,...
