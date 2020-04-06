@@ -1,10 +1,11 @@
 classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     properties
         apertureDiameter=300   % um
-        barWidth=[10 20 40 80 120] % um
+         % um
         flashDuration=50 % ms
         fixFlashTime=100
-        variableFlashTime=[50 100 200 400]
+         barWidth=[120 30 20 40 80 10]
+        variableFlashTime=[50 100 200 400 800]
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.15
@@ -28,6 +29,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         startMatrix
         adaptMatrix
         testMatrix
+       
     end
     
     methods
@@ -82,8 +84,6 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             epoch.addParameter('currentPhase', obj.currentPhase);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
-      
-
         end
         
         function p=createPresentation(obj)

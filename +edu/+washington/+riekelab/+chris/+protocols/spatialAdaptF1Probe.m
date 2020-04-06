@@ -12,7 +12,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         preTime=1000
         stimTime=2000
         tailTime=1000
-        downSample=4
+        downSample=1
         naturalImageContrastScale=0.6
         imgName='img031'
         psth=true
@@ -51,8 +51,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             patchLocs=floor(imgData.information.patchToAdapt.fixLocs);
             apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix
             
-            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/(2*6.6)):patchLocs(1)+round(apertureDiameterPix/(2*6.6)), ...,
-                patchLocs(2)-round(apertureDiameterPix/(2*6.6)):patchLocs(2)+round(apertureDiameterPix/(2*6.6)));
+            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/2):patchLocs(1)+round(apertureDiameterPix/2), ...,
+                patchLocs(2)-round(apertureDiameterPix/2):patchLocs(2)+round(apertureDiameterPix/2));
             obj.patchAdapt=imresize(obj.patchAdapt, apertureDiameterPix/(size(obj.patchAdapt,1)*obj.downSample),'nearest');
             obj.patchAdapt=obj.patchAdapt';
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
@@ -136,10 +136,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             end
             
         end
-        
-        
-        
-        
+ 
         
         function [imgMat] = getImgMatrix(obj,time)
             if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
