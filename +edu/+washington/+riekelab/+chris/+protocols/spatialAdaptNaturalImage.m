@@ -76,15 +76,15 @@ classdef spatialAdaptNaturalImage < edu.washington.riekelab.protocols.RiekeLabSt
             
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             % 6.6 tranlsate the um to VH pixels
-            obj.patchAdapt=obj.picture(obj.patchAdaptLocs(1)-round(apertureDiameterPix/(2*6.6)): obj.patchAdaptLocs(1)+round(apertureDiameterPix/(2*6.6)), ...,
-                obj.patchAdaptLocs(2)-round(apertureDiameterPix/(2*6.6)): obj.patchAdaptLocs(2)+round(apertureDiameterPix/(2*6.6)));
+            obj.patchAdapt=obj.picture(obj.patchAdaptLocs(1)-round(apertureDiameterPix/(2)): obj.patchAdaptLocs(1)+round(apertureDiameterPix/(2)), ...,
+                obj.patchAdaptLocs(2)-round(apertureDiameterPix/(2)): obj.patchAdaptLocs(2)+round(apertureDiameterPix/(2)));
             obj.patchAdapt=obj.normImg(obj.patchAdapt);
             
             index = mod(obj.numEpochsCompleted, numel(obj.patchOrder))+1;
             
             patchTestLocs=floor(obj.patchesToTestInfo(obj.patchOrder(index)).fixLocs);
-            obj.patchTest=obj.picture(patchTestLocs(1)-round(apertureDiameterPix/(2*6.6)):patchTestLocs(1)+round(apertureDiameterPix/(2*6.6)), ...,
-                patchTestLocs(2)-round(apertureDiameterPix/(2*6.6)):patchTestLocs(2)+round(apertureDiameterPix/(2*6.6)));
+            obj.patchTest=obj.picture(patchTestLocs(1)-round(apertureDiameterPix/(2)):patchTestLocs(1)+round(apertureDiameterPix/(2)), ...,
+                patchTestLocs(2)-round(apertureDiameterPix/(2)):patchTestLocs(2)+round(apertureDiameterPix/(2)));
             obj.patchTest=obj.normImg(obj.patchTest);
             testPatchAngle= obj.patchesToTestInfo(obj.patchOrder(index)).angles;
             obj.patchTest=imrotate(obj.patchTest, testPatchAngle);

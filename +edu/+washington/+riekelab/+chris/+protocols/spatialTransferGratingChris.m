@@ -82,8 +82,6 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             epoch.addParameter('currentPhase', obj.currentPhase);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
-      
-
         end
         
         function p=createPresentation(obj)
@@ -117,8 +115,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             end
                               
         end
-        
-        
+                
         function [imgMat] = getImgMatrix(obj,time)
             if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
                 adaptMat=obj.adaptMatrix.base;
@@ -137,8 +134,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             end
             imgMat=uint8(imgMat);
         end
-        
-        
+               
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
@@ -158,12 +154,8 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         function tf = shouldContinueRun(obj)
             tf = obj.numEpochsCompleted <obj.numberOfAverages* length(obj.phases)*length(obj.barWidth)*length(obj.variableFlashTime);
 
-        end
-        
-        
+        end 
     end
-    
-    
 end
 
 
