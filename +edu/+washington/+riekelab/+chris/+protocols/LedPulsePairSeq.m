@@ -3,11 +3,11 @@ classdef LedPulsePairSeq < edu.washington.riekelab.protocols.RiekeLabProtocol
     % LEDs for the two pulses of the pair.
     
     properties
-        led1                            % Output LED, pulse 1
+        led1                           % Output LED, pulse 1
         led2                            % Output LED, pulse 2
         
-        preTime = 100                   % Pulse leading duration (ms)
-        stimTime = 10                   % Pulse duration (ms)
+        preTime = 500                   % Pulse leading duration (ms)
+        stimTime = 1000                   % Pulse duration (ms)
         flashOffsetTimes = [0 50 100 200 400 800]       % Time(s) between onsets of pulses in pair (ms)
         tailTime = 500                  % Pulse trailing duration (ms)
         

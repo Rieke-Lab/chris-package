@@ -113,7 +113,8 @@ classdef spatialAdaptFigure < symphonyui.core.FigureHandler
                 y(results.sp) = 1;
                 y = sampleRate * conv(y, filter, 'same');
             end
-            
+            % downsample for plotting
+            x=x(1:10:end); y=y(1:10:end);
             
             obj.resp.count(barIndex,patternIndex,delayIndex)=obj.resp.count(barIndex,patternIndex,delayIndex)+1;
             obj.resp.trace{barIndex,patternIndex,delayIndex}=obj.resp.trace{barIndex,patternIndex,delayIndex}+y;

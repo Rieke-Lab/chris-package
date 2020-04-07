@@ -1,10 +1,11 @@
 classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     properties
         apertureDiameter=300   % um
-        barWidth=[10 20 40 80 120] % um
+         % um
         flashDuration=50 % ms
         fixFlashTime=100
-        variableFlashTime=[50 100 200 400]
+         barWidth=[120 30 20 40 80 10]
+        variableFlashTime=[50 100 200 400 800]
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.15
@@ -28,6 +29,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         startMatrix
         adaptMatrix
         testMatrix
+       
     end
     
     methods
@@ -130,6 +132,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             end
             imgMat=adaptMat+testMat;
             if max(imgMat(:))>255 || min(imgMat(:))<0
+                disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
                 error('img matrix intensity out of range');
             end
             imgMat=uint8(imgMat);
