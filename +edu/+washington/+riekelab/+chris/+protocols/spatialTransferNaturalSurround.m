@@ -5,19 +5,20 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
         annulusOuterDiameter = 600 % um
         flashDuration=50 % ms
         fixFlashTime=100  % ms
-        barWidth=[40 10 80]  % um
-        variableFlashTime=[50  200 800]   % um
+        barWidth=[20 60 120]  % um
+        variableFlashTime=[50 100 400]   % um
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.15
-        preTime=1000
-        stimTime=2000
-        tailTime=1000
+        preTime=600
+        stimTime=800
+        tailTime=800
         centerZeroMean=false
         imgName='img009'
+        surroundBarWidth=50
         downSample=1
         psth=true
-        numberOfAverages = uint16(3) % number of epochs to queue
+        numberOfAverages = uint16(2) % number of epochs to queue
         amp
     end
     
@@ -59,7 +60,6 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             obj.showFigure('edu.washington.riekelab.chris.figures.spatialAdaptFigure',...
                 obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.variableFlashTime, ...
                 'psth',obj.psth,'coloredBy',obj.phases);
-            
             if obj.testContrast<0 && obj.zeroMean
                 obj.testContrast=-((1-obj.adaptContrast)/2);  % this push positive stripes back to mean intensity,
                 % and dark stripe to zero and avoid out of range
@@ -78,7 +78,7 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
                 /(length(obj.phases)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             surroundIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)*length(obj.variableFlashTime)*length(obj.barWidth))) ...,
                 /(length(obj.phases)*length(obj.variableFlashTime)*length(obj.barWidth)),length(obj.surroundContrasts)+1)+1
-            % length(obj.imgNames)+1  for an zero contrast pattern
+            % length(obj.imgNames)+1  for an zero contrast pattern;
             patternIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,(length(obj.surroundContrasts)+1)*length(obj.phases) ...,
                 *length(obj.variableFlashTime)*length(obj.barWidth)))/((length(obj.surroundContrasts)+1)*length(obj.phases)...,
                 *length(obj.variableFlashTime)*length(obj.barWidth)),length(obj.patterns))+1
@@ -112,20 +112,18 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
                 elseif strcmp(obj.currentPattern,'image')
                     % load the images, you might have an out of bound issue
                     % for some patches
-                    patch=obj.picture(obj.patchLocs.x(surroundIndex-1)-patchRaidus+1:obj.patchLocs.x(surroundIndex-1)+patchRaidus, ...,
+                     patch=obj.picture(obj.patchLocs.x(surroundIndex-1)-patchRaidus+1:obj.patchLocs.x(surroundIndex-1)+patchRaidus, ...,
                         obj.patchLocs.y(surroundIndex-1)-patchRaidus+1:obj.patchLocs.y(surroundIndex-1)+patchRaidus);
                     [pIndex,~]=obj.generateMatrixAnnulus ...,
                         (patch,floor(obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter)) ...,
                         ,floor(obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter)));
-                    tp= mean2(obj.surroundMatrix.test(pIndex==1));
+                    tp= mean2(patch(pIndex==1));
                     % normalize the patch 
-                    obj.surroundMatrix.test=(obj.surroundMatrix.test-tp)/tp;   % contrast image
-                    obj.surroundMatrix.test=(obj.surroundMatrix.test+1)*obj.meanIntensity*255;
-                    min(obj.surroundMatrix.test(:))
-                    max(obj.surroundMatrix.test(:))
-                    obj.surroundMatrix.test=obj.surroundMatrix.test.*pIndex;
-               
-                end      
+                    patch=(patch-tp)/tp;   % contrast image
+                    patch=(patch+1)*obj.meanIntensity*255; 
+                    patch(pIndex==0)=0;
+                    obj.surroundMatrix.test=patch;
+                 end      
             elseif surroundIndex==1
                 obj.surroundMatrix.test=obj.createSurroundGrateMat(obj.meanIntensity,0,0,'seesaw');
                 obj.currentSurroundContrast=0;
@@ -140,6 +138,7 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
             epoch.addParameter('currentPattern', obj.currentPattern);
             epoch.addParameter('currentSurroundContrast', obj.currentSurroundContrast);
+
         end
         
         function p=createPresentation(obj)
@@ -148,7 +147,6 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
                
-            obj.startMatrix=uint8(obj.startMatrix);
             scene=stage.builtin.stimuli.Image(obj.startMatrix);
             scene.size = [windowSizePix  windowSizePix]; %scale up to canvas size
             scene.position=canvasSize/2;
@@ -227,7 +225,7 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
         function [sinewave2D] = createSurroundGrateMat(obj,meanIntensity,contrast,phase,mode)
             annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
             annulusOuterDiameterPix = 2*(obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter)/2);
-            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.surroundBarWidth));
             x =pi*meshgrid(linspace(-annulusOuterDiameterPix/2,annulusOuterDiameterPix/2,annulusOuterDiameterPix/obj.downSample));
             sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')

@@ -5,19 +5,20 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         annulusOuterDiameter = 650 % um
         flashDuration=50 % ms
         fixFlashTime=100  % ms
-        barWidth=[40 10 80]  % um
-        variableFlashTime=[50 100 200 800]   % um
-        surroundContrast=[0 0.3 0.6 0.9]
+        barWidth=[20 60 120]  % um
+        variableFlashTime=[50 100 200 600]   % um
+        surroundContrast=[0 0.5 1]
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.15
         preTime=1000
         stimTime=2000
         tailTime=1000
+        surroundBarWidth=50;
         centerZeroMean=false
         downSample=1
         psth=true
-        numberOfAverages = uint16(3) % number of epochs to queue
+        numberOfAverages = uint16(2) % number of epochs to queue
         amp
     end
     
@@ -32,6 +33,7 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         startMatrix
         adaptMatrix
         testMatrix     
+        currentSurroundPhase
         surroundMatrix
     end
     
@@ -68,11 +70,15 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
                 /(length(obj.phases)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             surroundIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)*length(obj.variableFlashTime)*length(obj.barWidth))) ...,
                 /(length(obj.phases)*length(obj.variableFlashTime)*length(obj.barWidth)),length(obj.surroundContrast))+1;
+            surroundPhaseIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.surroundContrast)*length(obj.phases) ...,
+                *length(obj.variableFlashTime)*length(obj.barWidth)))/(length(obj.surroundContrast) ...,
+                *length(obj.phases)*length(obj.variableFlashTime)*length(obj.barWidth)),2)+1;
             
             obj.currentPhase=obj.phases(phaseIndex);
             obj.currentFlashDelay=obj.variableFlashTime(flashIndex);
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
             obj.currentSurroundContrast=obj.surroundContrast(surroundIndex);
+            obj.currentSurroundPhase=obj.phases(surroundPhaseIndex);
             obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
                 obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime];
  
@@ -87,14 +93,15 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
             obj.testMatrix.base=obj.createCenterGrateMat(0,1,obj.currentPhase,'seesaw');  % this create the test grating
             obj.testMatrix.test=obj.createCenterGrateMat(obj.meanIntensity*obj.testContrast,1, obj.currentPhase,'seesaw');  % this create the test grating
             % create the surround matrix 
-            obj.surroundMatrix.base=obj.createSurroundGrateMat(obj.meanIntensity,0,0,'seesaw');
-            obj.surroundMatrix.test=obj.createSurroundGrateMat(obj.meanIntensity,obj.currentSurroundContrast,0,'seesaw');
+            obj.surroundMatrix.base=obj.createSurroundGrateMat(obj.meanIntensity,0,obj.currentSurroundPhase,'seesaw');
+            obj.surroundMatrix.test=obj.createSurroundGrateMat(obj.meanIntensity,obj.currentSurroundContrast,obj.currentSurroundPhase,'seesaw');
             
             obj.startMatrix=uint8(obj.adaptMatrix.base+obj.testMatrix.base+obj.surroundMatrix.base);
             % there are three experimenatl parameters manipulated. the
             % arrangement change pattern, flashDelay, then bar width, the order
             % can be switched accordingly.
             epoch.addParameter('currentPhase', obj.currentPhase);
+            epoch.addParameter('currentSurroundPhase', obj.currentSurroundPhase);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
             epoch.addParameter('currentSurroundContrast', obj.currentSurroundContrast);
@@ -185,7 +192,7 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         function [sinewave2D] = createSurroundGrateMat(obj,meanIntensity,contrast,phase,mode)
             annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
             annulusOuterDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
-            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.surroundBarWidth));
             x =pi*meshgrid(linspace(-annulusOuterDiameterPix/2,annulusOuterDiameterPix/2,annulusOuterDiameterPix/obj.downSample));
             sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')
