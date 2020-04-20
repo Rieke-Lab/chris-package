@@ -6,19 +6,19 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         flashDuration=50 % ms
         fixFlashTime=100  % ms
         barWidth=[20 60 120]  % um
-        variableFlashTime=[50 100 200 600]   % um
-        surroundContrast=[0 0.5 1]
+        variableFlashTime=[50 100 200 400]   % um
+        surroundStepContrast=[0 0.5 -0.5]
         adaptContrast=0.5
         testContrast=0.5
-        meanIntensity=0.15
+        meanIntensity=0.25
         preTime=1000
         stimTime=2000
         tailTime=1000
-        surroundBarWidth=50;
+        surroundBarWidth=60;
         centerZeroMean=false
         downSample=1
         psth=true
-        numberOfAverages = uint16(2) % number of epochs to queue
+        numberOfAverages = uint16(3) % number of epochs to queue
         amp
     end
     
@@ -27,13 +27,12 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         currentBarWidth
         currentFlashDelay
         currentPhase
-        currentSurroundContrast
+        currentSurroundStepContrast
         flashTimes
         phases=[0 180]
         startMatrix
         adaptMatrix
         testMatrix     
-        currentSurroundPhase
         surroundMatrix
     end
     
@@ -52,7 +51,7 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
                 obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.variableFlashTime, ...
                 'psth',obj.psth,'coloredBy',obj.phases);
             
-            if obj.testContrast<0 && obj.zeroMean
+            if obj.testContrast<0 && obj.centerZeroMean
                 obj.testContrast=-((1-obj.adaptContrast)/2);  % this push positive stripes back to mean intensity,
                 % and dark stripe to zero and avoid out of range
             end

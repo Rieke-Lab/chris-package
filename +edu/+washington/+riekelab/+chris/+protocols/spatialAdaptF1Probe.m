@@ -19,6 +19,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         amp
         numberOfAverage=uint16(3)
         interpulseInterval=0
+        scaleFactor=2
     end
     
     properties(Hidden)
@@ -34,6 +35,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         adaptMatrix
         startMatrix
         patchAdapt
+        
     end
     
     
@@ -51,8 +53,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             patchLocs=floor(imgData.information.patchToAdapt.fixLocs);
             apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix
             
-            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/2):patchLocs(1)+round(apertureDiameterPix/2), ...,
-                patchLocs(2)-round(apertureDiameterPix/2):patchLocs(2)+round(apertureDiameterPix/2));
+            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(1)+round(apertureDiameterPix/(2*obj.scaleFactor)), ...,
+                patchLocs(2)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(2)+round(apertureDiameterPix/(2*obj.scaleFactor)));
             obj.patchAdapt=imresize(obj.patchAdapt, apertureDiameterPix/(size(obj.patchAdapt,1)*obj.downSample),'nearest');
             obj.patchAdapt=obj.patchAdapt';
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
@@ -151,6 +153,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
                 end
             end
             imgMat=adaptMat+testMat;
+            imgMat(imgMat>255)=255; imgMat(imgMat<0)=0;
             if max(imgMat(:))>255 || min(imgMat(:))<0
                 disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
                 error('img matrix intensity out of range');
