@@ -7,7 +7,7 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         fixFlashTime=100  % ms
         barWidth=[20 60 120]  % um
         variableFlashTime=[50 100 200 400]   % um
-        surroundStepContrast=[0 0.5 -0.5]
+        surroundContrast=[0 0.5 1]
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.25
@@ -27,7 +27,8 @@ classdef spatialTransferAdaptingSurround < edu.washington.riekelab.protocols.Rie
         currentBarWidth
         currentFlashDelay
         currentPhase
-        currentSurroundStepContrast
+        currentSurroundPhase
+        currentSurroundContrast
         flashTimes
         phases=[0 180]
         startMatrix
