@@ -113,9 +113,9 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         
         function p=createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            annulusOuterDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             apertureDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             annulusInnerDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+            annulusOuterDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
 
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.backgroundIntensity); % Set background intensity
@@ -123,13 +123,14 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             % add surround 
                % add the surround ring step
                if obj.surroundIndex==2
+                   disp('test')
                    surroundSpot = stage.builtin.stimuli.Ellipse();
                    surroundSpot.radiusX = annulusOuterDiameterPix/2;
                    surroundSpot.radiusY = annulusOuterDiameterPix/2;
                    surroundSpot.position = canvasSize/2;
                    p.addStimulus(surroundSpot);
                    surroundSpotIntensity = stage.builtin.controllers.PropertyController(surroundSpot, 'color',...
-                       @(state) obj.getSurroundIntensity(obj, state.time));
+                       @(state) obj.getSurroundIntensity(state.time));
                    p.addController(surroundSpotIntensity);
                    % hide during pre & post
                    surroundSpotVisible = stage.builtin.controllers.PropertyController(surroundSpot, 'visible', ...
@@ -140,7 +141,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
                    maskSpot.radiusX = annulusInnerDiameterPix/2;
                    maskSpot.radiusY = annulusInnerDiameterPix/2;
                    maskSpot.position = canvasSize/2;
-                   maskSpot.color = obj.meanIntensity;
+                   maskSpot.color = obj.backgroundIntensity;
                    p.addStimulus(maskSpot);
                    
                end
@@ -198,6 +199,15 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             img=img*255;
             
         end
+        
+        function [intensity]= getSurroundIntensity(obj,time)
+            if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
+                intensity=obj.backgroundIntensity;
+            else
+                intensity=obj.stepIntensity;
+            end
+        end
+        
         
         
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)

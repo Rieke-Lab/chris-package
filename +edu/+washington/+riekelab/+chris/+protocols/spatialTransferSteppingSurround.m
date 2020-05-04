@@ -7,7 +7,7 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
         fixFlashTime=100  % ms
         barWidth=[20 60 120]  % um
         variableFlashTime=[50 200 400]   % um
-        surroundStepContrast=[0 0.5 -0.5 1 -1]
+        surroundStepContrast=[0  1 -1]
         adaptContrast=0.5
         testContrast=0.5
         meanIntensity=0.25
@@ -85,8 +85,14 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
             end
             obj.testMatrix.base=obj.createCenterGrateMat(0,1,obj.currentPhase,'seesaw');  % this create the test grating
             obj.testMatrix.test=obj.createCenterGrateMat(obj.meanIntensity*obj.testContrast,1, obj.currentPhase,'seesaw');  % this create the test grating
+            
+            
+            % create the surround matrix 
+            obj.surroundMatrix.base=obj.createSurroundGrateMat(obj.meanIntensity,0);
+            obj.surroundMatrix.test=obj.createSurroundGrateMat(obj.meanIntensity,obj.currentSurroundStepContrast);   
+            obj.startMatrix=obj.adaptMatrix.base+obj.testMatrix.base+obj.surroundMatrix.base;
+
              
-            obj.startMatrix=uint8(obj.adaptMatrix.base+obj.testMatrix.base);
             % there are three experimenatl parameters manipulated. the
             % arrangement change pattern, flashDelay, then bar width, the order
             % can be switched accordingly.
@@ -98,37 +104,15 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
         
         function p=createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            windowSizePix =obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
-            p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
+             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
-            annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
-            annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+            annulusOuterDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
 
-           % add the surround ring step
-            surroundSpot = stage.builtin.stimuli.Ellipse();
-            surroundSpot.radiusX = annulusOuterDiameterPix/2;
-            surroundSpot.radiusY = annulusOuterDiameterPix/2;
-            surroundSpot.position = canvasSize/2;
-            p.addStimulus(surroundSpot);
-            surroundSpotIntensity = stage.builtin.controllers.PropertyController(surroundSpot, 'color',...
-                @(state) obj.getSurroundIntensity(obj, state.time));
-            p.addController(surroundSpotIntensity);
-            % hide during pre & post
-            surroundSpotVisible = stage.builtin.controllers.PropertyController(surroundSpot, 'visible', ...
-                @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
-            p.addController(surroundSpotVisible);
-            %mask / annulus...
-            maskSpot = stage.builtin.stimuli.Ellipse();
-            maskSpot.radiusX = annulusInnerDiameterPix/2;
-            maskSpot.radiusY = annulusInnerDiameterPix/2;
-            maskSpot.position = canvasSize/2;
-            maskSpot.color = obj.meanIntensity;
-            p.addStimulus(maskSpot);
-            
-            % add center grating
+    
+            % add  grating
             obj.startMatrix=uint8(obj.startMatrix);
             scene=stage.builtin.stimuli.Image(obj.startMatrix);
-            scene.size = [windowSizePix  windowSizePix]; %scale up to canvas size
+            scene.size = [annulusOuterDiameterPix  annulusOuterDiameterPix]; %scale up to canvas size
             scene.position=canvasSize/2;
             % Use linear interpolation when scaling the image.
             scene.setMinFunction(GL.LINEAR);
@@ -138,26 +122,25 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
             sceneController = stage.builtin.controllers.PropertyController(scene, 'imageMatrix',...
                 @(state) obj.getImgMatrix( state.time));
             p.addController(sceneController);
-                     
+                
             % add aperture
             if obj.annulusOuterDiameter>0
                 aperture=stage.builtin.stimuli.Rectangle();
                 aperture.position=canvasSize/2;
-                aperture.size=[windowSizePix windowSizePix];
+                aperture.size=[annulusOuterDiameterPix annulusOuterDiameterPix];
                 mask=stage.core.Mask.createCircularAperture(1,1024);
                 aperture.setMask(mask);
                 p.addStimulus(aperture);
-                aperture.color=0;
+                aperture.color=obj.meanIntensity;
             end
                               
         end
         
         
         function [imgMat] = getImgMatrix(obj,time)
+            adaptMat=obj.adaptMatrix.base;
             % update the center matrix 
-            if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
-                adaptMat=obj.adaptMatrix.base;
-            else
+            if time>obj.preTime*1e-3  && time<(obj.preTime+obj.stimTime)*1e-3
                 adaptMat=obj.adaptMatrix.test;
             end
             testMat=obj.testMatrix.base;
@@ -167,9 +150,8 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
                 end
             end
             % update the surround matrix
-            if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
-                 surroundMat=obj.surroundMatrix.base;
-            else 
+            surroundMat=obj.surroundMatrix.base;
+            if time>obj.preTime*1e-3 && time>(obj.preTime+obj.stimTime)*1e-3
                 surroundMat= obj.surroundMatrix.test;
             end
             imgMat=adaptMat+testMat+surroundMat;
@@ -180,18 +162,13 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
             imgMat=uint8(imgMat);
         end
         
-        function [intensity]= getSurroundIntensity(obj,time)      
-            if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
-                intensity=obj.meanIntensity;
-            else
-                intensity=obj.meanIntensity*(1+obj.currentSurroundStepContrast);
-            end
-        end
+ 
         
         function [sinewave2D] = createCenterGrateMat(obj,meanIntensity,contrast,phase,mode)
             centerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.centerDiameter);
-             currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-            x =pi*meshgrid(linspace(-centerDiameterPix/2,centerDiameterPix/2,centerDiameterPix));
+            annulusOuterDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
+            currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+            x =pi*meshgrid(linspace(-annulusOuterDiameterPix/2,annulusOuterDiameterPix/2,annulusOuterDiameterPix));
             sinewave2D =sin(x/currentBarWidthPix +phase/180*pi);
             if strcmp(mode,'seesaw')
                 sinewave2D(sinewave2D>0)=1;
@@ -201,14 +178,30 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
             %aperture the center 
             for i=1:size(sinewave2D,1)
                 for j=1:size(sinewave2D,2)
-                    if sqrt((i-centerDiameterPix/2)^2+(j-centerDiameterPix/2)^2)> centerDiameterPix/2
+                    if sqrt((i-annulusOuterDiameterPix/2)^2+(j-annulusOuterDiameterPix/2)^2)> centerDiameterPix/2
                         sinewave2D(i,j)=0;
                     end
                 end
             end
         end
-
         
+        function [x] = createSurroundGrateMat(obj,meanIntensity,contrast)
+            annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+            annulusOuterDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
+            x =ones(annulusOuterDiameterPix,annulusOuterDiameterPix);
+            %aperture the center
+            for i=1:size(x,1)
+                for j=1:size(x,2)
+                    if sqrt((i-annulusOuterDiameterPix/2)^2+(j-annulusOuterDiameterPix/2)^2)< annulusInnerDiameterPix/2
+                        x(i,j)=0;
+                    end
+                end
+            end
+            x=x*meanIntensity*(1+contrast)*255;
+            
+        end
+        
+            
         function tf = shouldContinuePreparingEpochs(obj)
             tf = obj.numEpochsPrepared <obj.numberOfAverages*length(obj.surroundStepContrast)* ...,
                 length(obj.phases)*length(obj.barWidth)*length(obj.variableFlashTime);
