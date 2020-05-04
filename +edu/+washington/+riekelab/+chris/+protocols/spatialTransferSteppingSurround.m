@@ -101,7 +101,9 @@ classdef spatialTransferSteppingSurround < edu.washington.riekelab.protocols.Rie
             windowSizePix =obj.rig.getDevice('Stage').um2pix(obj.annulusOuterDiameter);
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
-                         
+            annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+            annulusInnerDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+
            % add the surround ring step
             surroundSpot = stage.builtin.stimuli.Ellipse();
             surroundSpot.radiusX = annulusOuterDiameterPix/2;
