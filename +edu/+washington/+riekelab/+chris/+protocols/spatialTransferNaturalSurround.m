@@ -85,7 +85,7 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             obj.currentPhase=obj.phases(phaseIndex);
             obj.currentFlashDelay=obj.variableFlashTime(flashIndex);
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
-            currentPattern=obj.patterns{patternIndex};
+            obj.currentPattern=obj.patterns{patternIndex};
     
             
             obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
@@ -110,10 +110,10 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             
             if surroundIndex>1
                 obj.currentSurroundContrast=obj.surroundContrasts(surroundIndex-1);
-                if strcmp(currentPattern,'grating')
+                if strcmp(obj.currentPattern,'grating')
                     obj.surroundMatrix.test=obj.createSurroundGrateMat ...,
                         (obj.meanIntensity,obj.currentSurroundContrast,0,'seesaw');
-                elseif strcmp(currentPattern,'images')
+                elseif strcmp(obj.currentPattern,'images')
                     % load the images, you might have an out of bound issue
                     % for some patches
                     patch=obj.picture(obj.patchLocs.x(surroundIndex-1)-patchRaidus+1:obj.patchLocs.x(surroundIndex-1)+patchRaidus, ...,
@@ -137,7 +137,7 @@ classdef spatialTransferNaturalSurround < edu.washington.riekelab.protocols.Riek
             epoch.addParameter('currentPhase', obj.currentPhase);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
-            epoch.addParameter('currentPattern', currentPattern);
+            epoch.addParameter('currentPattern', obj.currentPattern);
             epoch.addParameter('currentSurroundContrast', obj.currentSurroundContrast);
             
         end

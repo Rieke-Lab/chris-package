@@ -1,19 +1,21 @@
 classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     properties
         apertureDiameter=300  %um
-        barWidth=[20 40 80 120]  % um
+        annulusInnerDiameter = 300 % um
+        annulusOuterDiameter = 600 % um
+        barWidth=[20 60 120]  % um
         flashDuration=50  %ms
         fixFlashTime=100  % ms
-        variableFlashTime=[50 100 200 400]
-        spatialContrast=0.6
+        variableFlashTime=[50 100 200 ]
+        spatialContrast=0.8
         temporalContrast=0.5
         backgroundIntensity=0.1
         stepIntensity=0.4
-        preTime=1000
-        stimTime=2000
-        tailTime=1000
+        preTime=750
+        stimTime=800
+        tailTime=750
         downSample=1
-        naturalImageContrastScale=0.6
+        naturalImageContrastScale=1
         imgName='img031'
         psth=true
         amp
@@ -27,7 +29,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         currentBarWidth
         currentFlashDelay
         currentPattern
-        imgNameType=symphonyui.core.PropertyType('char','row',{'img031','img032','img046','img058','img080'});
+        imgNameType=symphonyui.core.PropertyType('char','row',{'img031','img032','img046','img080'});
         imgMatDir='C:\Users\Fred Rieke\Documents\chris-package\+edu\+washington\+riekelab\+chris\+resources\subjectTrajectory';
         flashTimes
         patterns={'spot','grating','patch'}
@@ -35,7 +37,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         adaptMatrix
         startMatrix
         patchAdapt
-        
+        surroundIndex
     end
     
     
@@ -81,6 +83,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.patterns)*length(obj.variableFlashTime))) ...,
                 /(length(obj.patterns)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
+            obj.surroundIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime))) ...,
+                /(length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime)),2)+1;
             switch stimTypeIndex
                 case 1
                     obj.currentPattern='spot';
@@ -97,10 +101,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             end
             obj.testMatrix.base=obj.createGrateMat(obj.backgroundIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
             obj.testMatrix.step=obj.createGrateMat(obj.stepIntensity*obj.temporalContrast,0,0,'seesaw');  % this create the test grating
-            size(obj.adaptMatrix.base)
-            size(obj.testMatrix.base)
-            
-            obj.startMatrix=uint8(obj.adaptMatrix.base);
+         
+            obj.startMatrix=obj.adaptMatrix.base;
             % there are three experimenatl parameters manipulated. the
             % arrangement change pattern, flashDelay, then bar width, the order
             % can be switched accordingly.
@@ -111,10 +113,37 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         
         function p=createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
+            annulusOuterDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             apertureDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
+            annulusInnerDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.annulusInnerDiameter);
+
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.backgroundIntensity); % Set background intensity
             
+            % add surround 
+               % add the surround ring step
+               if obj.surroundIndex==2
+                   surroundSpot = stage.builtin.stimuli.Ellipse();
+                   surroundSpot.radiusX = annulusOuterDiameterPix/2;
+                   surroundSpot.radiusY = annulusOuterDiameterPix/2;
+                   surroundSpot.position = canvasSize/2;
+                   p.addStimulus(surroundSpot);
+                   surroundSpotIntensity = stage.builtin.controllers.PropertyController(surroundSpot, 'color',...
+                       @(state) obj.getSurroundIntensity(obj, state.time));
+                   p.addController(surroundSpotIntensity);
+                   % hide during pre & post
+                   surroundSpotVisible = stage.builtin.controllers.PropertyController(surroundSpot, 'visible', ...
+                       @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
+                   p.addController(surroundSpotVisible);
+                   %mask / annulus...
+                   maskSpot = stage.builtin.stimuli.Ellipse();
+                   maskSpot.radiusX = annulusInnerDiameterPix/2;
+                   maskSpot.radiusY = annulusInnerDiameterPix/2;
+                   maskSpot.position = canvasSize/2;
+                   maskSpot.color = obj.meanIntensity;
+                   p.addStimulus(maskSpot);
+                   
+               end
             scene=stage.builtin.stimuli.Image(uint8(obj.startMatrix));
             scene.size = [apertureDiameterPix  apertureDiameterPix]; %scale up to canvas size
             scene.position=canvasSize/2;
