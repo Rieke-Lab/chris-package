@@ -3,17 +3,17 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         apertureDiameter=300  %um
         annulusInnerDiameter = 300 % um
         annulusOuterDiameter = 600 % um
-        barWidth=[20 60 120]  % um
+        barWidth=[20  60]  % um
         flashDuration=50  %ms
         fixFlashTime=100  % ms
-        variableFlashTime=[50 100 200 ]
+        variableFlashTime=[50 150 ]
         spatialContrast=0.8
         temporalContrast=0.5
         backgroundIntensity=0.1
         stepIntensity=0.4
-        preTime=750
-        stimTime=800
-        tailTime=750
+        preTime=600
+        stimTime=600
+        tailTime=600
         downSample=1
         naturalImageContrastScale=1
         imgName='img031'
@@ -29,7 +29,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         currentBarWidth
         currentFlashDelay
         currentPattern
-        imgNameType=symphonyui.core.PropertyType('char','row',{'img031','img032','img046','img080'});
+        imgNameType=symphonyui.core.PropertyType('char','row',{'img029','img031','img032','img046','img058','img080','img084'});
         imgMatDir='C:\Users\Fred Rieke\Documents\chris-package\+edu\+washington\+riekelab\+chris\+resources\subjectTrajectory';
         flashTimes
         patterns={'spot','grating','patch'}
@@ -38,6 +38,9 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         startMatrix
         patchAdapt
         surroundIndex
+        patchIndex
+        patchInfo
+        picture
     end
     
     
@@ -51,14 +54,8 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             % create natural image patch for adapting
             imgData=load(fullfile(obj.imgMatDir, obj.imgName));
-            picture=imgData.information.picture;
-            patchLocs=floor(imgData.information.patchToAdapt.fixLocs);
-            apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix
-            
-            obj.patchAdapt=picture(patchLocs(1)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(1)+round(apertureDiameterPix/(2*obj.scaleFactor)), ...,
-                patchLocs(2)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(2)+round(apertureDiameterPix/(2*obj.scaleFactor)));
-            obj.patchAdapt=imresize(obj.patchAdapt, apertureDiameterPix/(size(obj.patchAdapt,1)*obj.downSample),'nearest');
-            obj.patchAdapt=obj.patchAdapt';
+            obj.picture=imgData.information.picture;
+            obj.patchInfo=imgData.information.patchToAdapt;
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
@@ -74,6 +71,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
+      
             stimTypeIndex = mod(obj.numEpochsCompleted,length(obj.patterns))+1;  % 3 because there are 3 different patterns
             flashIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.patterns)))/length(obj.patterns), ...,
                 length(obj.variableFlashTime))+1;
@@ -85,6 +83,16 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
             obj.surroundIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime))) ...,
                 /(length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime)),2)+1;
+            obj.patchIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,2*length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime))) ...,
+                /(2*length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime)),7)+1;
+            patchLocs=obj.patchInfo(obj.patchIndex).fixLocs;
+            % set up the image patch , each picture has 7 patches
+            apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix     
+            obj.patchAdapt=obj.picture(patchLocs(1)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(1)+round(apertureDiameterPix/(2*obj.scaleFactor)), ...,
+                patchLocs(2)-round(apertureDiameterPix/(2*obj.scaleFactor)):patchLocs(2)+round(apertureDiameterPix/(2*obj.scaleFactor)));
+            obj.patchAdapt=imresize(obj.patchAdapt, apertureDiameterPix/(size(obj.patchAdapt,1)*obj.downSample),'nearest');
+            obj.patchAdapt=obj.patchAdapt';
+            
             switch stimTypeIndex
                 case 1
                     obj.currentPattern='spot';
@@ -123,7 +131,6 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             % add surround 
                % add the surround ring step
                if obj.surroundIndex==2
-                   disp('test')
                    surroundSpot = stage.builtin.stimuli.Ellipse();
                    surroundSpot.radiusX = annulusOuterDiameterPix/2;
                    surroundSpot.radiusY = annulusOuterDiameterPix/2;
@@ -222,11 +229,11 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < obj.numberOfAverage*length(obj.patterns)*length(obj.barWidth)*length(obj.variableFlashTime);
+            tf = obj.numEpochsPrepared < 7*2*obj.numberOfAverage*length(obj.patterns)*length(obj.barWidth)*length(obj.variableFlashTime);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < obj.numberOfAverage*length(obj.patterns)*length(obj.barWidth)*length(obj.variableFlashTime);
+            tf = obj.numEpochsCompleted <7*2*obj.numberOfAverage*length(obj.patterns)*length(obj.barWidth)*length(obj.variableFlashTime);
         end
         
     end
