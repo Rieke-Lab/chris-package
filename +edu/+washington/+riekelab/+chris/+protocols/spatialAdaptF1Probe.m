@@ -117,6 +117,9 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             epoch.addParameter('currentPattern', obj.currentPattern);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
+            epoch.addParameter('surroundIndex', obj.surroundIndex);            
+            epoch.addParameter('patchIndex', obj.patchIndex);
+            
         end
         
         function p=createPresentation(obj)
