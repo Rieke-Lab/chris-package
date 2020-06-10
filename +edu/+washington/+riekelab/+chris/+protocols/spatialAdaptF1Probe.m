@@ -55,7 +55,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
             % create natural image patch for adapting
             imgData=load(fullfile(obj.imgMatDir, obj.imgName));
             obj.picture=imgData.information.picture;
-            obj.patchInfo=imgData.information.patchToAdapt;
+            obj.patchInfo=imgData.information.patchToTest;
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
@@ -85,6 +85,7 @@ classdef spatialAdaptF1Probe < edu.washington.riekelab.protocols.RiekeLabStagePr
                 /(length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime)),2)+1;
             obj.patchIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,2*length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime))) ...,
                 /(2*length(obj.barWidth)*length(obj.patterns)*length(obj.variableFlashTime)),7)+1;
+
             patchLocs=obj.patchInfo(obj.patchIndex).fixLocs;
             % set up the image patch , each picture has 7 patches
             apertureDiameterPix=obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);  % transform to pix     
