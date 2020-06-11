@@ -5,7 +5,7 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
         preTime = 1000                   % Pulse leading duration (ms)
         stimTime = 100                 % Pulse duration (ms)
         tailTime = 1000                  % Pulse trailing duration (ms)
-        lightContrast = [-100 -50 -25 -10 10 25 50 100] % in percent
+        lightContrast = [-100 -50 -25 -10 10 25 50 ]  % in percent
         lightMean = [0.02 0.5]          % LED background mean (V or norm. [0-1] depending on LED units)                           % Input amplifier
         numberOfAverages = uint16(3)    % Number of epochs
         interpulseInterval = 0          % Duration between pulses (s)
@@ -34,9 +34,9 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
         
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
-            
-            obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
-                'groupBy', {'lightMean','Contrast'});
+%             
+%             obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
+%                 'groupBy', {'currentMean','currentContrast'});
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             
             if ~strcmp(obj.onlineAnalysis,'none')
@@ -45,13 +45,13 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
                     'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
                     'stimTime',obj.stimTime,'tailTime',obj.tailTime);
             end
-            
-            obj.rig.getDevice(obj.led).background = symphonyui.core.Measurement(obj.lightMean(1), device.background.displayUnits);
+              device = obj.rig.getDevice(obj.led);
+            device.background = symphonyui.core.Measurement(obj.lightMean(1), device.background.displayUnits);
         end
         
         function [stim, lightMean, lightContrast] = createLedStimulus(obj)
             lightMean = obj.lightMean(randi([1 length(obj.lightMean)]));
-            lightContrast = obj.lightContrast(randi([1 length(obj.lightContrast)]));
+            lightContrast = obj.lightContrast(randi([1 length(obj.lightContrast)]))/100;
             gen = symphonyui.builtin.stimuli.PulseGenerator();
             
             gen.preTime = obj.preTime;
@@ -70,12 +70,11 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
         
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, epoch);          
-            % get epoch number
-            [stim, lMean,lContrast] = obj.createLedStimulus();
+            [stim, currentMean,currentContrast] = obj.createLedStimulus();
             epoch.addStimulus(obj.rig.getDevice(obj.led), stim);
             epoch.addResponse(obj.rig.getDevice(obj.amp));          
-            epoch.addParameter('lightMean', lMean);
-            epoch.addParameter('lightContrast', lContrast);
+            epoch.addParameter('currentMean', currentMean);
+            epoch.addParameter('currentContrast', currentContrast);
         end
         
         function prepareInterval(obj, interval)

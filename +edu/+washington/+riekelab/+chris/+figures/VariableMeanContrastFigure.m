@@ -52,14 +52,16 @@ classdef VariableMeanContrastFigure < symphonyui.core.FigureHandler
             title(obj.axesHandle,'Variable Mean - contrast response');
             
             linesForLegends=[];
-            
+            legends=cell(1,numel(obj.lightMean));
+
             for k=1:length(obj.lightMean)
                 obj.lineHandle(k)=line(0,0,'Parent', obj.axesHandle, ...,
                     'Color',colors(k,:),'marker','none','linestyle','-','linewidth',1.5);
                 linesForLegends=[linesForLegends obj.lineHandle(k)];
+                legends{k}=['meanIntensity=' num2str(obj.lightMean(k))];
             end
             % for each subplot, add legend, weel this is not a neat code
-            legend(strcat('meanIntensity=',string(num2cell(1:2)))); legend boxoff;
+            legend(linesForLegends,legends); legend boxoff;
             
         end
         
@@ -69,10 +71,11 @@ classdef VariableMeanContrastFigure < symphonyui.core.FigureHandler
             response = epoch.getResponse(obj.ampDevice);
             epochResponseTrace = response.getData();
             sampleRate = response.sampleRate.quantityInBaseUnits;
-            currentMean=epoch.parameters('lightMean');
-            currentContrast=epoch.parameters('lightContrast');
-            meanIndex=find(currentMean==obj.lightMean);
-            contrastIndex=find(currentContrast==obj.lightContrast);
+            currentMean=epoch.parameters('currentMean');
+            currentContrast=epoch.parameters('currentContrast');
+    
+            meanIndex=find(currentMean==obj.lightMean);  % current contrast is percent
+            contrastIndex=find(currentContrast*100==obj.lightContrast);
             %process data and pull out epoch response
             if strcmp(obj.recordingType,'extracellular') %spike recording
                 %take (prePts+1:prePts+stimPts)
@@ -93,15 +96,12 @@ classdef VariableMeanContrastFigure < symphonyui.core.FigureHandler
                 newEpochResponse = chargeMult*trapz(epochResponseTrace(1:sampleRate*obj.stimTime/1000)); %pA*datapoint
                 newEpochResponse = newEpochResponse/sampleRate; %pA*sec = pC
             end
-            
-            
             obj.summaryData.responseMatrix(meanIndex,contrastIndex) =obj.summaryData.responseMatrix(meanIndex,contrastIndex)+newEpochResponse;
             obj.summaryData.countMatrix(meanIndex,contrastIndex)=obj.summaryData.countMatrix(meanIndex,contrastIndex)+1;
             
             %plot summary data...
             %data lines:
             meanMatrix = obj.summaryData.responseMatrix ./ obj.summaryData.countMatrix;
-            
             for i=1:numel(obj.lightMean)
                 set(obj.lineHandle(meanIndex),'XData',obj.lightContrast,'YData', meanMatrix(meanIndex,:));
             end
