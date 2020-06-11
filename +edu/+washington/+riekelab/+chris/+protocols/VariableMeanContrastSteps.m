@@ -10,12 +10,16 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
         numberOfAverages = uint16(3)    % Number of epochs
         interpulseInterval = 0          % Duration between pulses (s)
         amp
+        onlineAnalysis = 'extracellular'% Type of online analysis
+
     end
     
     properties (Hidden)
         ledType
         ampType
         contrastsType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
+        onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
+                
     end
 
     methods
@@ -34,9 +38,13 @@ classdef VariableMeanContrastSteps < edu.washington.riekelab.protocols.RiekeLabP
             obj.showFigure('symphonyui.builtin.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
                 'groupBy', {'lightMean','Contrast'});
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('symphonyui.builtin.figures.ResponseStatisticsFigure', obj.rig.getDevice(obj.amp), {@mean, @var}, ...
-                'baselineRegion', [0 obj.preTime], ...
-                'measurementRegion', [obj.preTime obj.preTime+obj.stimTime]);
+            
+            if ~strcmp(obj.onlineAnalysis,'none')
+                obj.showFigure('edu.washington.riekelab.chris.figures.VariableMeanContrastFigure',...
+                    obj.rig.getDevice(obj.amp),obj.lightMean,obj.lightContrast,...
+                    'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
+                    'stimTime',obj.stimTime,'tailTime',obj.tailTime);
+            end
             
             obj.rig.getDevice(obj.led).background = symphonyui.core.Measurement(obj.lightMean(1), device.background.displayUnits);
         end
