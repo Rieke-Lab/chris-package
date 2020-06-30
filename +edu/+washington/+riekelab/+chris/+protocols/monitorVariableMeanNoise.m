@@ -33,8 +33,7 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         end
          
         function prepareRun(obj)
-            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-            
+            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);      
             obj.stimTime=obj.epochDuration*numel(obj.meanIntensity)*obj.numberOfReps;
             % Determine seed values.
             for i=1:numel(obj.meanIntensity)*obj.numberOfReps
@@ -42,7 +41,6 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             end
             obj.intensitySeed=RandStream.shuffleSeed;   
             %at start of epoch, set random stream
-            obj.noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed);
             intensityStream = RandStream('mt19937ar', 'Seed', obj.intensitySeed);
             intensities=intensityStream.randi(numel(obj.meanIntensity),1,numel(obj.meanIntensity)*obj.numberOfReps);
             for i=1:numel(intensities)
@@ -53,42 +51,39 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             updateRate=60/obj.frameDwell;
             framePerPeriod=ceil(updateRate*obj.epochDuration/1e3);  % note that the frame here is not the monitor frame rate
             obj.intensityOverFrame=zeros(1,framePerPeriod*numel(obj.meanIntensityArray));
-            for i=1:numel(obj.meanIntensity)
+            for i=1:numel(obj.meanIntensityArray)
                 noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(i));
-                obj.intensityOverFrame((i-1)*framePerPeriod+1: i*framePerPeriod)= obj.meanIntensity(i)+ ...
-                    obj.noiseStdv * obj.meanIntensity(i) * noiseStream.randn(1, framePerPeriod);
+                obj.intensityOverFrame((i-1)*framePerPeriod+1: i*framePerPeriod)= obj.meanIntensityArray(i)+ ...
+                    obj.noiseStdv * obj.meanIntensityArray(i) * noiseStream.randn(1, framePerPeriod);
             end
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-            if ~strcmp(obj.onlineAnalysis,'none')
-                obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
-                obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
-                obj.rig.getDevice('Stage'),...
-                'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
-                'stimTime',obj.stimTime,'frameDwell',obj.frameDwell,...
-                'noiseStdv',obj.noiseStdv);
-            end
+%             if ~strcmp(obj.onlineAnalysis,'none')
+%                 obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
+%                 obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
+%                 obj.rig.getDevice('Stage'),...
+%                 'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
+%                 'stimTime',obj.stimTime,'frameDwell',obj.frameDwell,...
+%                 'noiseStdv',obj.noiseStdv);
+%             end
         end
         
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
             device = obj.rig.getDevice(obj.amp);
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
-            epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
-            epoch.addResponse(device);
-  
+            epoch.addDirectCurrentStimulus(device, device.background, double(duration) , obj.sampleRate);
             epoch.addParameter('noiseSeed', obj.noiseSeed);
             epoch.addParameter('intensitySeed', obj.intensitySeed);
             epoch.addParameter('intensityOverFrame', obj.intensityOverFrame);
+            epoch.addResponse(device);                     
         end
 
         function p = createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            
             %convert from microns to pixels...
-            apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
-            
+            apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter); 
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensityArray(1)); % Set background intensity
             
@@ -99,16 +94,18 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             p.addStimulus(noiseRect);
             preFrames = round(60 * (obj.preTime/1e3));
             noiseValue = stage.builtin.controllers.PropertyController(noiseRect, 'color',...
-                @(state)getNoiseIntensity(obj, state.frame - preFrames));
+                @(state)getNoiseIntensity(obj,state.frame - preFrames, obj.intensityOverFrame));
             p.addController(noiseValue); %add the controller
-            function i = getNoiseIntensity(obj, frame)
+              
+            function i = getNoiseIntensity(obj, frame,internsityArrays)
                 persistent intensity;
                 if frame<0 %pre frames. frame 0 starts stimPts
                     intensity = obj.meanIntensityArray(1);
                 else %in stim frames
-                    if mod(frame, obj.frameDwell) == 1 %noise update
-                        intensity = obj.intensityOverFrame((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
+                    if mod(frame, obj.frameDwell) == 0 %noise update
+                        intensity = internsityArrays((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
                     end
+                    
                 end
                 i = intensity;
             end
@@ -122,7 +119,6 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
                 aperture.setMask(mask);
                 p.addStimulus(aperture); %add aperture
             end
-            
             % hide during pre & post
             noiseRectVisible = stage.builtin.controllers.PropertyController(noiseRect, 'visible', ...
                 @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
