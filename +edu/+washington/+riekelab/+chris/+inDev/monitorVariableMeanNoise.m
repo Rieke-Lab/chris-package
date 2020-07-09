@@ -5,7 +5,7 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         epochDuration = 2000 % ms, change mean intensity every xxx
         tailTime = 500 % ms
         apertureDiameter = 300 % um
-        noiseStdv = 0.3 %contrast, as fraction of mean
+        noiseStdv = 0.9 %contrast, as fraction of mean
         meanIntensity = [0.05 0.2 0.5]
         frameDwell = 1 % Frames per noise update
         useRandomSeed = true % false = repeated noise trajectory (seed 0)
@@ -20,10 +20,10 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
         meanIntensityType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
         noiseSeed
+        intensitySeed
         meanIntensityArray
         intensityOverFrame
         framePerPeriod
-        stimTime
     end
     
     methods
@@ -40,21 +40,21 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             for i=1:numel(obj.meanIntensity)*obj.numberOfPeriods
                 obj.noiseSeed(i) = RandStream.shuffleSeed;
             end
-            intensitySeed=RandStream.shuffleSeed;   
+            obj.intensitySeed=RandStream.shuffleSeed;   
             %at start of epoch, set random stream
-            intensityStream = RandStream('mt19937ar', 'Seed', intensitySeed);
+            intensityStream = RandStream('mt19937ar', 'Seed', obj.intensitySeed);
             intensities=intensityStream.randi(numel(obj.meanIntensity),1,numel(obj.meanIntensity)*obj.numberOfPeriods);
             for i=1:numel(intensities)
                 obj.meanIntensityArray(i)=obj.meanIntensity(intensities(i));
             end
-            obj.meanIntensityArray
+            
             % assuming frame rate at 60 Hz 
             updateRate=60/obj.frameDwell;
             obj.framePerPeriod=ceil(updateRate*obj.epochDuration/1e3);  % note that the frame here is not the monitor frame rate
 
-%             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-%             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
-%                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
+            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
+                obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
 %             if ~strcmp(obj.onlineAnalysis,'none')
 %                 obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
 %                 obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
@@ -68,8 +68,8 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
             device = obj.rig.getDevice(obj.amp);
-            duration = double((obj.preTime + obj.stimTime + obj.tailTime) / 1e3);
-            epoch.addDirectCurrentStimulus(device, device.background, duration , obj.sampleRate);
+            duration = double((obj.preTime + obj.epochDuration + obj.tailTime) / 1e3);
+            epoch.addDirectCurrentStimulus(device, device.background, double(duration) , obj.sampleRate);
             epoch.addParameter('noiseSeed', obj.noiseSeed);
             epoch.addParameter('meanIntensityArray', obj.meanIntensityArray);
             epoch.addResponse(device);                     
@@ -79,7 +79,7 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
             %convert from microns to pixels...
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter); 
-            p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
+            p = stage.core.Presentation((obj.preTime + obj.epochDuration + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensityArray(1)); % Set background intensity
             
             % Create noise stimulus.            
@@ -93,18 +93,18 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             p.addController(noiseValue); %add the controller
               
             function i = getNoiseIntensity(obj, frame)
-                persistent intensity
-                persistent noiseStream
+                persistent intensity;
                 if frame<0 %pre frames. frame 0 starts stimPts
                     intensity = obj.meanIntensityArray(1);
-                    noiseStream=RandStream('mt19937ar', 'Seed', obj.noiseSeed(1));
                 else %in stim frames
-                    periodIndex=(frame- mod(frame, obj.frameDwell*obj.framePerPeriod))/(obj.frameDwell*obj.framePerPeriod)+1;
-                    if mod(frame, obj.frameDwell*obj.framePerPeriod) ==0  % change noise stream each period
-                        noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(periodIndex));
+                    periodIndex=randi(50);
+                    if mod(frame, obj.frameDwell*obj.framePerPeriod) == 1 %noise update
+                         noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(periodIndex));
                     end
-                    intensity = obj.meanIntensityArray(periodIndex)+ obj.meanIntensityArray(periodIndex) ...
-                        *obj.noiseStdv*noiseStream.randn ;
+                         intensity = obj.meanIntensityArray(periodIndex)+ obj.meanIntensityArray(periodIndex) ...
+                             ((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
+                    end
+                    
                 end
                 i = intensity;
             end
