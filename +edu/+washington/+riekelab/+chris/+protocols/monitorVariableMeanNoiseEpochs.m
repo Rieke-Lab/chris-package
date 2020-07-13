@@ -1,17 +1,16 @@
-classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     
     properties
-        preTime = 500 % ms
-        epochDuration = 2000 % ms, change mean intensity every xxx
-        tailTime = 500 % ms
+        preTime = 0 % ms
+        stimTime = 2000 % ms, change mean intensity every xxx
+        tailTime = 0 % ms
         apertureDiameter = 300 % um
         noiseStdv = 0.3 %contrast, as fraction of mean
         meanIntensity = [0.05 0.2 0.5]
         frameDwell = 1 % Frames per noise update
         useRandomSeed = true % false = repeated noise trajectory (seed 0)
-        onlineAnalysis = 'extracellular'
-        numberOfPeriods = uint16(50) % number of switching period each epoch
-        numberOfEpochs = uint16(1) % number of epochs to queue
+        onlineAnalysis = 'none'
+        numberOfAverages = uint16(100) % number of epochs to queue
         amp % Output amplifier
     end
 
@@ -20,10 +19,8 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
         meanIntensityType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
         noiseSeed
-        meanIntensityArray
+        currentMean
         intensityOverFrame
-        framePerPeriod
-        stimTime
     end
     
     methods
@@ -35,27 +32,11 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
          
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);      
-            obj.stimTime=obj.epochDuration*numel(obj.meanIntensity)*obj.numberOfPeriods;
-            % Determine seed values.
-            for i=1:numel(obj.meanIntensity)*obj.numberOfPeriods
-                obj.noiseSeed(i) = RandStream.shuffleSeed;
-            end
-            intensitySeed=RandStream.shuffleSeed;   
-            %at start of epoch, set random stream
-            intensityStream = RandStream('mt19937ar', 'Seed', intensitySeed);
-            intensities=intensityStream.randi(numel(obj.meanIntensity),1,numel(obj.meanIntensity)*obj.numberOfPeriods);
-            for i=1:numel(intensities)
-                obj.meanIntensityArray(i)=obj.meanIntensity(intensities(i));
-            end
-            obj.meanIntensityArray
-            % assuming frame rate at 60 Hz 
-            updateRate=60/obj.frameDwell;
-            obj.framePerPeriod=ceil(updateRate*obj.epochDuration/1e3);  % note that the frame here is not the monitor frame rate
 
-%             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-%             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
-%                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-%             if ~strcmp(obj.onlineAnalysis,'none')
+            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
+                obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
+% %             if ~strcmp(obj.onlineAnalysis,'none')
 %                 obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
 %                 obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
 %                 obj.rig.getDevice('Stage'),...
@@ -68,10 +49,26 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
             device = obj.rig.getDevice(obj.amp);
-            duration = double((obj.preTime + obj.stimTime + obj.tailTime) / 1e3);
-            epoch.addDirectCurrentStimulus(device, device.background, duration , obj.sampleRate);
+            duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
+
+            obj.noiseSeed = RandStream.shuffleSeed;
+            %at start of epoch, set random stream
+            epochMean=obj.meanIntensity(randi(numel(obj.meanIntensity)));       
+            % assuming frame rate at 60 Hz 
+            updateRate=60/obj.frameDwell;
+            framePerPeriod=ceil(updateRate*obj.stimTime/1e3);  % note that the frame here is not the monitor frame rate
+            obj.intensityOverFrame=zeros(1,framePerPeriod);
+            noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed);
+            obj.intensityOverFrame(1:framePerPeriod)= epochMean+ ...
+                obj.noiseStdv * epochMean * noiseStream.randn(1, framePerPeriod);
+            
+            obj.intensityOverFrame(obj.intensityOverFrame<0)=0;
+            obj.intensityOverFrame(obj.intensityOverFrame>1)=1;
+            
+            epoch.addDirectCurrentStimulus(device, device.background, double(duration) , obj.sampleRate);
             epoch.addParameter('noiseSeed', obj.noiseSeed);
-            epoch.addParameter('meanIntensityArray', obj.meanIntensityArray);
+            epoch.addParameter('currentMean', epochMean);
+            epoch.addParameter('intensityOverFrame', obj.intensityOverFrame);
             epoch.addResponse(device);                     
         end
 
@@ -80,7 +77,7 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             %convert from microns to pixels...
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter); 
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
-            p.setBackgroundColor(obj.meanIntensityArray(1)); % Set background intensity
+            p.setBackgroundColor(obj.meanIntensity(1)); % Set background intensity
             
             % Create noise stimulus.            
             noiseRect = stage.builtin.stimuli.Rectangle();
@@ -89,22 +86,17 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
             p.addStimulus(noiseRect);
             preFrames = round(60 * (obj.preTime/1e3));
             noiseValue = stage.builtin.controllers.PropertyController(noiseRect, 'color',...
-                @(state)getNoiseIntensity(obj,state.frame - preFrames));
+                @(state)getNoiseIntensity(obj,state.frame - preFrames, obj.intensityOverFrame));
             p.addController(noiseValue); %add the controller
               
-            function i = getNoiseIntensity(obj, frame)
-                persistent intensity
-                persistent noiseStream
+            function i = getNoiseIntensity(obj, frame,internsityArrays)
+                persistent intensity;
                 if frame<0 %pre frames. frame 0 starts stimPts
                     intensity = obj.meanIntensityArray(1);
-                    noiseStream=RandStream('mt19937ar', 'Seed', obj.noiseSeed(1));
                 else %in stim frames
-                    periodIndex=(frame- mod(frame, obj.frameDwell*obj.framePerPeriod))/(obj.frameDwell*obj.framePerPeriod)+1;
-                    if mod(frame, obj.frameDwell*obj.framePerPeriod) ==0  % change noise stream each period
-                        noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(periodIndex));
-                    end
-                    intensity = obj.meanIntensityArray(periodIndex)+ obj.meanIntensityArray(periodIndex) ...
-                        *obj.noiseStdv*noiseStream.randn ;
+                    if mod(frame, obj.frameDwell) == 0 %noise update
+                        intensity = internsityArrays((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
+                    end                  
                 end
                 i = intensity;
             end
@@ -125,11 +117,11 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
         end
 
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < obj.numberOfEpochs;
+            tf = obj.numEpochsPrepared < obj.numberOfAverages*numel(obj.meanIntensity);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < obj.numberOfEpochs;
+            tf = obj.numEpochsCompleted < obj.numberOfAverages*numel(obj.meanIntensity);
         end
     end
     

@@ -234,6 +234,8 @@ classdef DovesMoviePlusMean < edu.washington.riekelab.protocols.RiekeLabStagePro
                     length(obj.stimulusIndices))+1);
                 obj.getImageSubject();
             end
+            sInd=obj.stimulusIndex;
+            fprintf('%s %d\n', 'stimulus index ::', sInd);
             % type index  1 for spot only, 2 for adapting flash, 3 for mean
             % flash
             if obj.numEpochsCompleted<3
@@ -250,17 +252,7 @@ classdef DovesMoviePlusMean < edu.washington.riekelab.protocols.RiekeLabStagePro
             epoch.addParameter('currentStimSet',obj.currentStimSet);
             epoch.addParameter('typeIndex',obj.typeIndex);
         end
-        
-        % Same presentation each epoch in a run. Replay.
-        function controllerDidStartHardware(obj)
-            controllerDidStartHardware@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
-            if (obj.numEpochsCompleted >= 1) && (obj.numEpochsCompleted < obj.numberOfAverages) && (length(unique(obj.stimulusIndices)) == 1)
-                obj.rig.getDevice('Stage').replay
-            else
-                obj.rig.getDevice('Stage').play(obj.createPresentation());
-            end
-        end
-        
+
         function tf = shouldContinuePreparingEpochs(obj)
             tf = obj.numEpochsPrepared < obj.numberOfAverages*length(obj.stimulusIndices)*2+3;
         end

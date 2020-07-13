@@ -84,7 +84,7 @@ classdef VariableMeanContrastFigure < symphonyui.core.FigureHandler
                 S = edu.washington.riekelab.turner.utils.spikeDetectorOnline(epochResponseTrace);
                 newEpochResponse = length(S.sp); %spike count
             else %intracellular - Vclamp
-                epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:sampleRate*obj.preTime/1000)); %baseline
+                epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(floor((sampleRate*obj.tailTime/2)/1000):end)); %baseline
                 %take (prePts+1:prePts+stimPts)
                 epochResponseTrace = epochResponseTrace((sampleRate*obj.preTime/1000)+1:(sampleRate*(obj.preTime + obj.stimTime+obj.tailTime)/1000));
                 %charge transfer
@@ -110,10 +110,10 @@ classdef VariableMeanContrastFigure < symphonyui.core.FigureHandler
             limDown = min(meanMatrix(:));
             limUp = max(meanMatrix(:));
             if isempty(obj.unityHandle)
-                obj.unityHandle = line([limDown limUp] , [limDown limUp],...
+                obj.unityHandle = line([0 0] , [limDown limUp],...
                     'Parent', obj.axesHandle,'Color','k','Marker','none','LineStyle','--');
             else
-                set(obj.unityHandle, 'XData', [limDown limUp],...
+                set(obj.unityHandle, 'XData', [0 0],...
                     'YData', [limDown limUp]);
             end   
         end
