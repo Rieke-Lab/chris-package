@@ -23,7 +23,7 @@ ref_period = 2E-3; %s
 ref_period_points = round(ref_period./SampleInterval); %data points
 
 [Ntraces,L] = size(D);
-Dhighpass = edu.washington.riekelab.turner.utils.highPassFilter(D,HighPassCut_spikes,SampleInterval);
+Dhighpass = edu.washington.riekelab.chris.utils.highPassFilter(D,HighPassCut_spikes,SampleInterval);
 
 %initialize output stuff...
 sp = cell(Ntraces,1);
@@ -43,7 +43,7 @@ for i=1:Ntraces
     
 
     %get peaks
-    [peaks,peak_times] = edu.washington.riekelab.turner.utils.getPeaks(trace,1); %positive peaks
+    [peaks,peak_times] = edu.washington.riekelab.chris.utils.getPeaks(trace,1); %positive peaks
     peak_times = peak_times(peaks>0); %only positive deflections
     peaks = trace(peak_times);
     peak_times = peak_times(peaks>thresh);      

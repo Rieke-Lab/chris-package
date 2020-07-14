@@ -73,7 +73,7 @@ classdef FrameTimingFigure < symphonyui.core.FigureHandler
             tVec = (0:length(FMdata)-1) ./ sampleRate;
 
             %check frame timing
-            times = edu.washington.riekelab.turner.utils.getFrameTiming(FMdata,lightCrafterFlag);
+            times = edu.washington.riekelab.chris.utils.getFrameTiming(FMdata,lightCrafterFlag);
             durations = diff(times(:));
             minDuration = min(durations) / sampleRate;
             maxDuration = max(durations) / sampleRate;

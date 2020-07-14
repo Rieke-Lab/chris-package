@@ -78,7 +78,7 @@ classdef AreaSummationFigure < symphonyui.core.FigureHandler
             if strcmp(obj.recordingType,'extracellular') %spike recording
                 epochResponseTrace = epochResponseTrace(1:prePts+stimPts);
                 %count spikes
-                S = edu.washington.riekelab.turner.utils.spikeDetectorOnline(epochResponseTrace);
+                S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace);
                 newEpochResponse = sum(S.sp > prePts); %spike count during stim
                 newBaseline = preScaleFactor * sum(S.sp < prePts); %spike count before stim, scaled by length
             else %intracellular - Vclamp
