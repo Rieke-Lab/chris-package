@@ -45,9 +45,9 @@ classdef SplitFieldCentering < edu.washington.riekelab.protocols.RiekeLabStagePr
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
+            obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis);
-            obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             if ~strcmp(obj.onlineAnalysis,'none')
                 % custom figure handler
@@ -74,7 +74,7 @@ classdef SplitFieldCentering < edu.washington.riekelab.protocols.RiekeLabStagePr
             if strcmp(obj.onlineAnalysis,'extracellular') %spike recording
                 filterSigma = (20/1000)*sampleRate; %msec -> dataPts
                 newFilt = normpdf(1:10*filterSigma,10*filterSigma/2,filterSigma);
-                res = edu.washington.riekelab.turner.utils.spikeDetectorOnline(quantities,[],sampleRate);
+                res = edu.washington.riekelab.chris.utils.spikeDetectorOnline(quantities,[],sampleRate);
                 epochResponseTrace = zeros(size(quantities));
                 epochResponseTrace(res.sp) = 1; %spike binary
                 epochResponseTrace = sampleRate*conv(epochResponseTrace,newFilt,'same'); %inst firing rate

@@ -6,11 +6,11 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
         tailTime = 0 % ms
         apertureDiameter = 300 % um
         noiseStdv = 0.3 %contrast, as fraction of mean
-        meanIntensity = [0.05 0.2 0.5]
+        meanIntensity = [0.08 0.65]
         frameDwell = 1 % Frames per noise update
         useRandomSeed = true % false = repeated noise trajectory (seed 0)
-        onlineAnalysis = 'none'
-        numberOfAverages = uint16(100) % number of epochs to queue
+        onlineAnalysis = 'extracellular'
+        numberOfAverages = uint16(200) % number of epochs to queue
         amp % Output amplifier
     end
 
@@ -52,8 +52,13 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
 
             obj.noiseSeed = RandStream.shuffleSeed;
+            fprintf('%s %d\n', 'current epoch::', obj.numEpochsPrepared);
             %at start of epoch, set random stream
-            epochMean=obj.meanIntensity(randi(numel(obj.meanIntensity)));       
+            if numel(obj.meanIntensity)>2
+                epochMean=obj.meanIntensity(randi(numel(obj.meanIntensity)));    
+            else 
+                epochMean=obj.meanIntensity(2-mod(obj.numEpochsPrepared,2));
+            end
             % assuming frame rate at 60 Hz 
             updateRate=60/obj.frameDwell;
             framePerPeriod=ceil(updateRate*obj.stimTime/1e3);  % note that the frame here is not the monitor frame rate
