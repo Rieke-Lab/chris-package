@@ -19,7 +19,8 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         ampType
         onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
         %saved out to each epoch...
-        stimulusTag
+        currentStimulusTag
+        tags={'grate','disc'};
         eqvContrastList = [-0.9 -0.7 -0.5 -0.3 -0.1 0 0.1 0.3 0.5 0.7 0.9];
         eqvContrastType = symphonyui.core.PropertyType('char', 'row', {'all','negative','positive'})
         currentEqvContrast
@@ -44,9 +45,9 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             
             if ~strcmp(obj.onlineAnalysis,'none')
-                obj.showFigure('edu.washington.riekelab.chris.figures.ImageVsIntensityFigure',...
-                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
-                'preTime',obj.preTime,'stimTime',obj.stimTime);
+                obj.showFigure('edu.washington.riekelab.chris.figures.FlashedGrateVsIntensityFigure',...
+                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,'barWidth', obj.barWidth,...
+                'preTime',obj.preTime,'stimTime',obj.stimTime,'eqvContrastList',obj.eqvContrastList,'tags',obj.tags);
             end
             
             if strcmp(obj.eqvContrastType,'all')
@@ -68,16 +69,16 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
 
             evenInd = mod(obj.numEpochsCompleted,2);
             if evenInd == 1 %even, show null
-                obj.stimulusTag = 'disc';
+                obj.currentStimulusTag = 'disc';
             elseif evenInd == 0 %odd, show grating
-                obj.stimulusTag = 'grate';
+                obj.currentStimulusTag = 'grate';
             end    
             pairInd=(obj.numEpochsCompleted-mod(obj.numEpochsCompleted,2))/2+1;
             barInd=(pairInd-1-mod(pairInd-1,numel(obj.eqvContrastList)))/numel(obj.eqvContrastList)+1;
             obj.currentBarWidth=obj.barWidth(barInd);
             contrastInd=mod(pairInd-1,numel(obj.eqvContrastList))+1;
             obj.currentEqvContrast=obj.eqvContrastList(contrastInd);
-            epoch.addParameter('stimulusTag', obj.stimulusTag);
+            epoch.addParameter('currentStimulusTag', obj.currentStimulusTag);
             epoch.addParameter('currentEqvContrast', obj.currentEqvContrast);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
         end
