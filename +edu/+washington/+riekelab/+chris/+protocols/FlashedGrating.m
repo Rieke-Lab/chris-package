@@ -88,8 +88,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 grate.size = [apertureDiameterPix, apertureDiameterPix];
                 grate.position = canvasSize/2;
                 grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-                newMean = (1+obj.currentContrast)*obj.backgroundIntensity; %amplitude of square wave
-                grate.color=(1+obj.spatialContrast)*newMean; % well, somehow the grateColor is defined as the peak intensity
+                grate.color = 2*(1+obj.currentContrast)*obj.backgroundIntensity; %amplitude of square wave
                 grate.contrast = obj.grateSpatialContrast; %multiplier on square wave
                 zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
                 offsets = zeroCrossings-grate.size(1)/2; %difference between each zero crossing and center of texture, pixels
