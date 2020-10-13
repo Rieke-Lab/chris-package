@@ -78,7 +78,7 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
                 spot = stage.builtin.stimuli.Ellipse();
                 spot.radiusX =apertureDiameterPix/2;
                 spot.radiusY =apertureDiameterPix/2;
-                spot.position = canvaSize/2;
+                spot.position = canvasSize/2;
                 p.addStimulus(spot);
                 spotMean = stage.builtin.controllers.PropertyController(spot, 'color',...
                     @(state)obj.getSpotMean(state.time));
@@ -87,9 +87,9 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
                 grate = stage.builtin.stimuli.Grating('square'); %square wave grating
                 grate.orientation = 0;
                 grate.size = [apertureDiameterPix, apertureDiameterPix];
-                grate.position = canvaSize/2;
+                grate.position = canvasSize/2;
                 grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-                grate.color =(1+obj.spatialContrast)*obj.backgroundIntensity; %amplitude of square wave
+                grate.color =2*obj.backgroundIntensity; %amplitude of square wave
                 grate.contrast = obj.spatialContrast; %multiplier on square wave
                 zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
                 offsets = zeroCrossings-grate.size(1)/2; %difference between each zero crossing and center of texture, pixels
@@ -109,10 +109,10 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
             
             if (obj.apertureDiameter > 0) %% Create aperture
                 aperture = stage.builtin.stimuli.Rectangle();
-                aperture.position = canvaSize/2;
+                aperture.position = canvasSize/2;
                 aperture.color = obj.backgroundIntensity;
-                aperture.size = [max(canvaSize) max(canvaSize)];
-                mask = stage.core.Mask.createCircularAperture(obj.rig.getDevice('Stage').um2pix(/max(canvaSize), 1024); %circular aperture
+                aperture.size = [max(canvasSize) max(canvasSize)];
+                mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/max(canvasSize), 1024); %circular aperture
                 aperture.setMask(mask);
                 p.addStimulus(aperture); %add aperture
             end
@@ -129,9 +129,9 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
         
         function [grateMean] = getGrateMean(obj,time)
             
-            grateMean=(1+obj.spatialContrast)*obj.backgroundIntensity;
+            grateMean=2*obj.backgroundIntensity;
             if time>obj.preTime/1e3 && time< (obj.preTime+obj.stimTime)/1e3
-                grateMean=(1+obj.spatialContrast)*obj.stepIntensity;
+                grateMean=2*obj.stepIntensity;
             end
         end
         
