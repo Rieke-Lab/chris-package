@@ -88,7 +88,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 grate.size = [apertureDiameterPix, apertureDiameterPix];
                 grate.position = canvasSize/2;
                 grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-                grate.color = 2*(1+obj.currentContrast)*obj.backgroundIntensity; %amplitude of square wave
+                grate.color = 2*(1+obj.currentEqvContrast)*obj.backgroundIntensity; %amplitude of square wave
                 grate.contrast = obj.grateSpatialContrast; %multiplier on square wave
                 zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
                 offsets = zeroCrossings-grate.size(1)/2; %difference between each zero crossing and center of texture, pixels
@@ -105,7 +105,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
             elseif strcmp(obj.stimulusTag,'disc')
                 scene = stage.builtin.stimuli.Rectangle();
                 scene.size = canvasSize;
-                scene.color = (1+obj.currentContrast)*obj.backgroundIntensity;
+                scene.color = (1+obj.currentEqvContrast)*obj.backgroundIntensity;
                 scene.position = canvasSize/2;
                 p.addStimulus(scene);
                 sceneVisible = stage.builtin.controllers.PropertyController(scene, 'visible', ...
