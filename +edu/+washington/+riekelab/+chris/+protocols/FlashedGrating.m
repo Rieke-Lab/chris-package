@@ -8,7 +8,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         apertureDiameter = 200 % um
         barWidth=[10 20 40 60 90 120];
         backgroundIntensity = 0.3; %0-1
-        eqvContrast = 'all'
+        eqvContrast = [-0.1 0.1 0.3 0.5 0.7 0.9]
         grateSpatialContrast=0.9
         onlineAnalysis = 'none'
         amp % Output amplifier
@@ -21,8 +21,6 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         %saved out to each epoch...
         currentStimulusTag
         tags={'grate','disc'};
-        eqvContrastList = [-0.9 -0.7 -0.5 -0.3 -0.1 0 0.1 0.3 0.5 0.7 0.9];
-        eqvContrastType = symphonyui.core.PropertyType('char', 'row', {'all','negative','positive'})
         currentEqvContrast
         currentBarWidth
     end
@@ -48,14 +46,6 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 obj.showFigure('edu.washington.riekelab.chris.figures.FlashedGrateVsIntensityFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,'barWidth', obj.barWidth,...
                 'preTime',obj.preTime,'stimTime',obj.stimTime,'eqvContrastList',obj.eqvContrastList,'tags',obj.tags);
-            end
-            
-            if strcmp(obj.eqvContrastType,'all')
-                obj.eqvContrastList=obj.eqvContrastList;
-            elseif strcmp(obj.eqvContrastType,'positive')
-                obj.eqvContrastList=obj.eqvContrastList(obj.eqvContrastList>-0.2);
-            else 
-                obj.eqvContrastList=obj.eqvContrastList(obj.eqvContrastList<0.2);
             end
 
         end
@@ -98,7 +88,8 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 grate.size = [apertureDiameterPix, apertureDiameterPix];
                 grate.position = canvasSize/2;
                 grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
-                grate.color = (1+obj.currentContrast)*obj.backgroundIntensity; %amplitude of square wave
+                newMean = (1+obj.currentContrast)*obj.backgroundIntensity; %amplitude of square wave
+                grate.color=(1+obj.spatialContrast)*newMean; % well, somehow the grateColor is defined as the peak intensity
                 grate.contrast = obj.grateSpatialContrast; %multiplier on square wave
                 zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
                 offsets = zeroCrossings-grate.size(1)/2; %difference between each zero crossing and center of texture, pixels
