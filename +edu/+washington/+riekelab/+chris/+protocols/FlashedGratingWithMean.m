@@ -5,12 +5,13 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
         stimTime = 2000 % ms
         tailTime = 2000 % ms
         apertureDiameter = 240 % um
-        barWidth=[10 20 40 60 90 120];
+        barWidth=[ 10 20 40 60 90 120];
         fixedFlashTime=100
+        flashDuration=100;
         variableFlashTimes=[50 100 200 400 800]
         backgroundIntensity = 0.05; %0-1
-        stepIntensity=0.5
-        spatialContrast=0.9
+        stepIntensity=0.7
+        spatialContrast=0.3
         psth=true;
         amp % Output amplifier
         numberOfAverages = uint16(3) % number of epochs to queue
@@ -34,9 +35,9 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             %%%%%%%%% need a new online analysis figure later
-            obj.showFigure('edu.washington.riekelab.chris.figures.variableFlashFigure',...
-                obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.variableFlashTime, ...
-                'psth',obj.psth);
+%             obj.showFigure('edu.washington.riekelab.chris.figures.variableFlashFigure',...
+%                 obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.variableFlashTimes, ...
+%                 'psth',obj.psth);
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             
@@ -56,11 +57,11 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
                 flashIndex=mod(obj.numEpochsCompleted-3,numel(obj.variableFlashTimes))+1;
                 tempInd=(obj.numEpochsCompleted-3-mod(obj.numEpochsCompleted-3,numel(obj.variableFlashTimes)))/numel(obj.variableFlashTimes)+1;
                 barIndex=mod(tempInd-1,numel(obj.barWidth))+1;
-                obj.currentFlashDelay=obj.variableFlashTime(flashIndex);
+                obj.currentFlashDelay=obj.variableFlashTimes(flashIndex);
                 obj.currentBarWidth=obj.barWidth(barIndex);
             end
-            obj.flashTimes=[obj.fixFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixFlashTime ...,
-                obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime];
+            obj.flashTimes=[obj.fixedFlashTime obj.preTime+obj.currentFlashDelay obj.preTime+obj.stimTime-obj.fixedFlashTime ...,
+                obj.preTime+obj.stimTime+obj.currentFlashDelay  obj.preTime+obj.stimTime+obj.tailTime-obj.fixedFlashTime];
             epoch.addParameter('currentFlashDelay', obj.currentFlashDelay);
             epoch.addParameter('currentFlashTimes', obj.flashTimes);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
@@ -99,7 +100,7 @@ classdef FlashedGratingWithMean < edu.washington.riekelab.protocols.RiekeLabStag
                 grate.phase = phaseShift; %keep contrast reversing boundary in center
                 p.addStimulus(grate); %add grating to the presentation
                 grateMean = stage.builtin.controllers.PropertyController(grate, 'color',...
-                    @(state) obj.getGrateMean(obj));
+                    @(state) obj.getGrateMean(state.time));
                 p.addController(grateMean); %add the controller
                 % hide during pre & post
                 grateVisible = stage.builtin.controllers.PropertyController(grate, 'visible', ...
