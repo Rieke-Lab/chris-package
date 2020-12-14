@@ -32,7 +32,7 @@ classdef LinearEquivalentDisc < edu.washington.riekelab.chris.protocols.NaturalI
         end
 
         function prepareRun(obj)
-            prepareRun@edu.washington.riekelab.turner.protocols.NaturalImageFlashProtocol(obj);
+            prepareRun@edu.washington.riekelab.chris.protocols.NaturalImageFlashProtocol(obj);
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...

@@ -23,13 +23,13 @@ classdef variableFlashFigure < symphonyui.core.FigureHandler
             obj.psth = ip.Results.psth;
             obj.barWidth=ip.Results.barWidth;
             obj.variableFlashTimes=ip.Results.variableFlashTimes;
-            
+           
             for i=1:length(obj.barWidth)
-                for k=1:length(obj.variableFlashTimes)
-                    obj.resp.trace{i,k}=0;   % create the globle variable to store the mean response,
-                    obj.resp.count(i,k)=0;
+                    for k=1:length(obj.variableFlashTimes)
+                        obj.resp.trace{i,k}=0;   % create the globle variable to store the mean response,
+                        obj.resp.count(i,k)=0;
+                    end
                 end
-            end
             obj.createUi();
         end
         
