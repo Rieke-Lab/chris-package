@@ -1,4 +1,4 @@
-classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef FlashedGratingWithEqvDisc < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
     properties
         preTime = 200 % ms
