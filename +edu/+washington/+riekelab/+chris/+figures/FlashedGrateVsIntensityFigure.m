@@ -6,7 +6,7 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
         preTime
         stimTime
         barWidth
-        eqvContrastList
+        eqvContrast
         tags
     end
     
@@ -26,7 +26,7 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
             ip.addParameter('preTime', [], @(x)isvector(x));
             ip.addParameter('stimTime', [], @(x)isvector(x));
             ip.addParameter('barWidth', [], @(x)isvector(x));
-            ip.addParameter('eqvContrastList', [], @(x)isvector(x));
+            ip.addParameter('eqvContrast', [], @(x)isvector(x));
             ip.addParameter('tags', [], @(x)iscellstr(x) || isvector(x));
 
             ip.parse(varargin{:});
@@ -34,11 +34,11 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
             obj.preTime = ip.Results.preTime;
             obj.stimTime = ip.Results.stimTime;
             obj.barWidth=ip.Results.barWidth;
-            obj.eqvContrastList=ip.Results.eqvContrastList;
+            obj.eqvContrast=ip.Results.eqvContrast;
             obj.tags=ip.Results.tags;
 
-            obj.summaryData.resp=zeros(numel(obj.barWidth),numel(obj.eqvContrastList), numel(obj.tags));
-            obj.summaryData.count=zeros(numel(obj.barWidth),numel(obj.eqvContrastList), numel(obj.tags));
+            obj.summaryData.resp=zeros(numel(obj.barWidth),numel(obj.eqvContrast), numel(obj.tags));
+            obj.summaryData.count=zeros(numel(obj.barWidth),numel(obj.eqvContrast), numel(obj.tags));
             
             obj.createUi();
         end
@@ -46,7 +46,7 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
         function createUi(obj)
             import appbox.*;
             for i=1:length(obj.barWidth)
-                obj.axesHandle(i) = subplot(2, ceil(length(obj.barWidth)),i, ...
+                obj.axesHandle(i) = subplot(1, ceil(length(obj.barWidth)),i, ...
                     'Parent', obj.figureHandle, ...
                     'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'), ...
                     'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
@@ -60,7 +60,7 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
                 else
                     ylabel(obj.axesHandle(i), 'PSC(pA)');
                 end
-                for j=1:numel(obj.eqvContrastList)
+                for j=1:numel(obj.eqvContrast)
                     obj.lineHandle(i,j)=line(0, 0,...
                     'Parent', obj.axesHandle(i),'Color','k','Marker','o','LineStyle','none');
                 end
@@ -76,9 +76,9 @@ classdef FlashedGrateVsIntensityFigure < symphonyui.core.FigureHandler
             sampleRate = response.sampleRate.quantityInBaseUnits;
             currentEqvContrast=epoch.parameters('currentEqvContrast');
             currentBarWidth=epoch.parameters('currentBarWidth');
-            stimulusTag = epoch.parameters('stimulusTag');
+            stimulusTag = epoch.parameters('currentStimulusTag');
             barInd=find(currentBarWidth==obj.barWidth);
-            contrastInd=find(currentEqvContrast==obj.eqvContrastList);
+            contrastInd=find(currentEqvContrast==obj.eqvContrast);
             switch stimulusTag
                 case 'grate'
                     tagInd=1;

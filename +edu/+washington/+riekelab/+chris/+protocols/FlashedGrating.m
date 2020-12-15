@@ -6,7 +6,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         tailTime = 400 % ms
         
         apertureDiameter = 200 % um
-        barWidth=[10 20 40 60 90 120];
+        barWidth=70;
         backgroundIntensity = 0.3; %0-1
         eqvContrast = [-0.1 0.1 0.3 0.5 0.7 0.9]
         grateSpatialContrast=0.9
@@ -20,9 +20,9 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
         %saved out to each epoch...
         currentStimulusTag
-        tags={'grate','disc'};
+%         tags=symphonyui.core.PropertyType('char', 'row', {'grate', 'disc'})
+        tags={'grate', 'disc'}
         currentEqvContrast
-        currentBarWidth
     end
 
     methods
@@ -38,15 +38,15 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
-                'groupBy',{'stimulusTag'});
+                'groupBy',{'currentStimulusTag'});
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             
-            if ~strcmp(obj.onlineAnalysis,'none')
-                obj.showFigure('edu.washington.riekelab.chris.figures.FlashedGrateVsIntensityFigure',...
-                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,'barWidth', obj.barWidth,...
-                'preTime',obj.preTime,'stimTime',obj.stimTime,'eqvContrastList',obj.eqvContrastList,'tags',obj.tags);
-            end
+%             if ~strcmp(obj.onlineAnalysis,'none')
+%                 obj.showFigure('edu.washington.riekelab.chris.figures.FlashedGrateVsIntensityFigure',...
+%                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,'barWidth', obj.barWidth,...
+%                 'preTime',obj.preTime,'stimTime',obj.stimTime,'eqvContrast',obj.eqvContrast,'tags',obj.tags);
+%             end
 
         end
         
@@ -64,13 +64,10 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 obj.currentStimulusTag = 'grate';
             end    
             pairInd=(obj.numEpochsCompleted-mod(obj.numEpochsCompleted,2))/2+1;
-            barInd=(pairInd-1-mod(pairInd-1,numel(obj.eqvContrastList)))/numel(obj.eqvContrastList)+1;
-            obj.currentBarWidth=obj.barWidth(barInd);
-            contrastInd=mod(pairInd-1,numel(obj.eqvContrastList))+1;
-            obj.currentEqvContrast=obj.eqvContrastList(contrastInd);
+            contrastInd=mod(pairInd-1,numel(obj.eqvContrast))+1;
+            obj.currentEqvContrast=obj.eqvContrast(contrastInd);
             epoch.addParameter('currentStimulusTag', obj.currentStimulusTag);
             epoch.addParameter('currentEqvContrast', obj.currentEqvContrast);
-            epoch.addParameter('currentBarWidth', obj.currentBarWidth);
         end
         
         function p = createPresentation(obj)            
@@ -81,13 +78,13 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
 
             
-            if strcmp(obj.stimulusTag,'grate')
+            if strcmp(obj.currentStimulusTag,'grate')
                 % Create grating stimulus.
                 grate = stage.builtin.stimuli.Grating('square'); %square wave grating
                 grate.orientation = 0;
                 grate.size = [apertureDiameterPix, apertureDiameterPix];
                 grate.position = canvasSize/2;
-                grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
+                grate.spatialFreq = 1/(2*obj.rig.getDevice('Stage').um2pix(obj.barWidth));
                 grate.color = 2*(1+obj.currentEqvContrast)*obj.backgroundIntensity; %amplitude of square wave
                 grate.contrast = obj.grateSpatialContrast; %multiplier on square wave
                 zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
@@ -102,7 +99,7 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
                 grateVisible = stage.builtin.controllers.PropertyController(grate, 'visible', ...
                     @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
                 p.addController(grateVisible);
-            elseif strcmp(obj.stimulusTag,'disc')
+            elseif strcmp(obj.currentStimulusTag,'disc')
                 scene = stage.builtin.stimuli.Rectangle();
                 scene.size = canvasSize;
                 scene.color = (1+obj.currentEqvContrast)*obj.backgroundIntensity;
@@ -126,11 +123,11 @@ classdef FlashedGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoco
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < 2*obj.numberOfAverages*numel(obj.barWidth)*numel(obj.eqvContrastList);
+            tf = obj.numEpochsPrepared < 2*obj.numberOfAverages*numel(obj.eqvContrast);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < 2*obj.numberOfAverages*numel(obj.barWidth)*numel(obj.eqvContrastList);
+            tf = obj.numEpochsCompleted < 2*obj.numberOfAverages*numel(obj.eqvContrast);
         end
 
     end
