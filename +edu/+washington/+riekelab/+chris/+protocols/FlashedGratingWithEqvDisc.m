@@ -5,12 +5,12 @@ classdef FlashedGratingWithEqvDisc < edu.washington.riekelab.protocols.RiekeLabS
         stimTime = 400 % ms
         tailTime = 400 % ms
         
-        apertureDiameter = 200 % um
-        barWidth=70;
+        apertureDiameter = 160 % um
+        barWidth=[30 80];
         backgroundIntensity = 0.3; %0-1
-        eqvContrast = [-0.1 0.1 0.3 0.5 0.7 0.9]
+        eqvContrast = [-0.1 0.3 0.6 0.9]
         grateSpatialContrast=0.9
-        onlineAnalysis = 'none'
+        onlineAnalysis = 'extracellular'
         amp % Output amplifier
         numberOfAverages = uint16(3) % number of epochs to queue
     end

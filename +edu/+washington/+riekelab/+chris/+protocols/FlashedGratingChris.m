@@ -6,10 +6,10 @@ classdef FlashedGratingChris< edu.washington.riekelab.protocols.RiekeLabStagePro
         tailTime = 400 % ms
         
         apertureDiameter = 200 % um
-        barWidth=[10 20 40 60 90 120];
+        barWidth=[10 20 40 60 80 100];
         backgroundIntensity = 0.3; %0-1
         contrast=0.9
-        onlineAnalysis = 'none'
+        onlineAnalysis = 'extracellular'
         amp % Output amplifier
         numberOfAverages = uint16(3) % number of epochs to queue
     end
@@ -45,7 +45,7 @@ classdef FlashedGratingChris< edu.washington.riekelab.protocols.RiekeLabStagePro
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
-            barInd=mod(obj.epochsCompleted, numel(obj.barWidth))+1;
+            barInd=mod(obj.numEpochsCompleted, numel(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barInd);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
         end
@@ -93,11 +93,11 @@ classdef FlashedGratingChris< edu.washington.riekelab.protocols.RiekeLabStagePro
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < 2*obj.numberOfAverages*numel(obj.barWidth);
+            tf = obj.numEpochsPrepared < obj.numberOfAverages*numel(obj.barWidth);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < 2*obj.numberOfAverages*numel(obj.barWidth);
+            tf = obj.numEpochsCompleted < obj.numberOfAverages*numel(obj.barWidth);
         end
 
     end
