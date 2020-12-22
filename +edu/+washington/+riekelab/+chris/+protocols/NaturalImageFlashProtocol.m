@@ -110,6 +110,7 @@ classdef (Abstract) NaturalImageFlashProtocol < edu.washington.riekelab.protocol
             epoch.addParameter('backgroundIntensity', obj.backgroundIntensity);
         end
     end
+    methods (Static)
         function allEquivalentIntensityValues =  getEquivalentIntensityValues(obj,innerDiameter,outerDiameter,RFsigma)
             %outerDiameter is circle in which to integrate. innerDiameter
             %is the size of a circle to mask off before integration.
@@ -168,4 +169,3 @@ classdef (Abstract) NaturalImageFlashProtocol < edu.washington.riekelab.protocol
     end
     
 end
-
