@@ -36,13 +36,13 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-% %             if ~strcmp(obj.onlineAnalysis,'none')
-%                 obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
-%                 obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
-%                 obj.rig.getDevice('Stage'),...
-%                 'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
-%                 'stimTime',obj.stimTime,'frameDwell',obj.frameDwell,...
-%                 'noiseStdv',obj.noiseStdv);
+% % %             if ~strcmp(obj.onlineAnalysis,'none')
+% %                 obj.showFigure('edu.washington.riekelab.chris.figures.LinearFilterFigure',...
+% %                 obj.rig.getDevice(obj.amp),obj.rig.getDevice('Frame Monitor'),...
+% %                 obj.rig.getDevice('Stage'),...
+% %                 'recordingType',obj.onlineAnalysis,'preTime',obj.preTime,...
+% %                 'stimTime',obj.stimTime,'frameDwell',obj.frameDwell,...
+% %                 'noiseStdv',obj.noiseStdv);
 %             end
         end
         
@@ -59,6 +59,7 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             else 
                 epochMean=obj.meanIntensity(2-mod(obj.numEpochsPrepared,2));
             end
+ 
             % assuming frame rate at 60 Hz 
             updateRate=60/obj.frameDwell;
             framePerPeriod=ceil(updateRate*obj.stimTime/1e3);  % note that the frame here is not the monitor frame rate
@@ -70,11 +71,11 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             obj.intensityOverFrame(obj.intensityOverFrame<0)=0;
             obj.intensityOverFrame(obj.intensityOverFrame>1)=1;
             
-            epoch.addDirectCurrentStimulus(device, device.background, double(duration) , obj.sampleRate);
+            epoch.addDirectCurrentStimulus(device, device.background,duration , obj.sampleRate);
             epoch.addParameter('noiseSeed', obj.noiseSeed);
             epoch.addParameter('currentMean', epochMean);
             epoch.addParameter('intensityOverFrame', obj.intensityOverFrame);
-            epoch.addResponse(device);                     
+            epoch.addResponse(device);       
         end
 
         function p = createPresentation(obj)
@@ -93,7 +94,7 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             noiseValue = stage.builtin.controllers.PropertyController(noiseRect, 'color',...
                 @(state)getNoiseIntensity(obj,state.frame - preFrames, obj.intensityOverFrame));
             p.addController(noiseValue); %add the controller
-              
+ 
             function i = getNoiseIntensity(obj, frame,internsityArrays)
                 persistent intensity;
                 if frame<0 %pre frames. frame 0 starts stimPts
@@ -119,6 +120,7 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             noiseRectVisible = stage.builtin.controllers.PropertyController(noiseRect, 'visible', ...
                 @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
             p.addController(noiseRectVisible);
+ 
         end
 
         function tf = shouldContinuePreparingEpochs(obj)
