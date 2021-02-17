@@ -12,7 +12,7 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
         preTime=0
         stimTime=30000
         tailTime=30000
-        downSample=0
+        downSample=1
         psth=true
         numberOfAverages = uint16(3) % number of epochs to queue
         amp
@@ -26,7 +26,7 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
         startMatrix
         adaptMatrix
         testMatrix
-        phaseIndex      
+        phaseIndex
     end
     
     methods
@@ -40,16 +40,14 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             %%%%%%%%% need a new online analysis figure later
-            obj.showFigure('edu.washington.riekelab.chris.figures.spatialAdaptMultipleFlashFigure',...
+            obj.showFigure('edu.washington.riekelab.chris.figures.spatialAdaptMultiplePhasesFigure',...
                 obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth, ...
-                'psth',obj.psth,'coloredBy',obj.phases);
-            
-            obj.flashTimes=sort([obj.preTime+obj.fixFlashTime obj.preTime+obj.variableFlashTime
+                'psth',obj.psth);
+            obj.flashTimes=sort([obj.preTime+obj.fixFlashTime obj.preTime+obj.variableFlashTime ...
                 obj.preTime+obj.variableFlashTime+obj.phaseInterval obj.preTime+obj.stimTime+obj.fixFlashTime ...
-                 obj.preTime+obj.stimTime+obj.variableFlashTime obj.preTime+obj.stimTime+obj.variableFlashTime+obj.phaseInterval ...
+                obj.preTime+obj.stimTime+obj.variableFlashTime obj.preTime+obj.stimTime+obj.variableFlashTime+obj.phaseInterval ...
                 obj.preTime+obj.stimTime+obj.tailTime-obj.fixFlashTime]);
             obj.phaseIndex=[1 repmat([1,2],1,numel(obj.variableFlashTime)) 1 1 repmat([1,2],1,numel(obj.variableFlashTime)) 1];
-            
         end
         function prepareEpoch(obj, epoch)
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
@@ -58,7 +56,6 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
             barWidthIndex = mod(obj.numEpochsCompleted,length(obj.barWidth))+1;
-            
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
             
             % create matrix for adapting and flashing
@@ -70,9 +67,6 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
             obj.testMatrix.test.offphase=obj.createGrateMat(obj.testIntensity/2,1, obj.phases(2),'seesaw');  % this create the test grating
             
             obj.startMatrix=uint8(obj.adaptMatrix.base+obj.testMatrix.base);
-            % there are three experimenatl parameters manipulated. the
-            % arrangement change pattern, flashDelay, then bar width, the order
-            % can be switched accordingly.
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
         end
         
@@ -92,7 +86,7 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
             p.addStimulus(scene);
             
             sceneController = stage.builtin.controllers.PropertyController(scene, 'imageMatrix',...
-                @(state) obj.getImgMatrix( state.frame));
+                @(state) getImgMatrix( obj,state.time));
             p.addController(sceneController);
             
             % add aperture
@@ -106,30 +100,31 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
                 aperture.color=0;
             end
             
-        end
-        
-        function [imgMat] = getImgMatrix(obj,frame)
-            if frame<60*(obj.preTime*1e-3) || frame> 60*((obj.preTime+obj.stimTime)*1e-3)
-                adaptMat=obj.adaptMatrix.base;
-            else
-                adaptMat=obj.adaptMatrix.test;
-            end
-            testMat=obj.testMatrix.base;
-            for i=1:length(obj.flashTimes)
-                if frame>60*obj.flashTimes(i)*1e-3 && time< 60*(obj.flashTimes(i)+obj.flashDuration)*1e-3
-                    if obj.phaseIndex(i)==1
-                        testMat=obj.testMatrix.test.inphase;
-                    elseif obj.phaseIndex(i)==2
-                        testMat=obj.testMatrix.test.offphase;
+            
+            
+            function [imgMat] = getImgMatrix(obj,time)
+                if time< (obj.preTime*1e-3) || time>  ((obj.preTime+obj.stimTime)*1e-3)
+                    adaptMat=obj.adaptMatrix.base;
+                else
+                    adaptMat=obj.adaptMatrix.test;
+                end
+                testMat=obj.testMatrix.base;
+                for i=1:length(obj.flashTimes)
+                    if time>   obj.flashTimes(i)*1e-3 && time<  (obj.flashTimes(i)+obj.flashDuration)*1e-3
+                        if obj.phaseIndex(i)==1
+                            testMat=obj.testMatrix.test.inphase;
+                        elseif obj.phaseIndex(i)==2
+                            testMat=obj.testMatrix.test.offphase;
+                        end
                     end
                 end
+                imgMat=adaptMat+testMat;
+                if max(imgMat(:))>255 || min(imgMat(:))<0
+                    disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
+                    error('img matrix intensity out of range');
+                end
+                imgMat=uint8(imgMat);
             end
-            imgMat=adaptMat+testMat;
-            if max(imgMat(:))>255 || min(imgMat(:))<0
-                disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
-                error('img matrix intensity out of range');
-            end
-            imgMat=uint8(imgMat);
         end
         
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
@@ -145,11 +140,11 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared <obj.numberOfAverages*length(obj.phases)*length(obj.barWidth);
+            tf = obj.numEpochsPrepared <obj.numberOfAverages*length(obj.barWidth);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted <obj.numberOfAverages* length(obj.phases)*length(obj.barWidth);
+            tf = obj.numEpochsCompleted <obj.numberOfAverages*length(obj.barWidth);
         end
     end
 end
