@@ -8,7 +8,7 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
         phaseInterval=1000; % switch phases every flash
         meanIntensity=0.2
         adaptStepIntensity=0.5
-        testIntensity=0.3
+        testContrast=0.3
         preTime=0
         stimTime=30000
         tailTime=30000
@@ -63,9 +63,11 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
             obj.adaptMatrix.test=obj.createGrateMat((obj.meanIntensity+obj.adaptStepIntensity)/2,...
                 abs(obj.adaptStepIntensity-obj.meanIntensity)/(obj.meanIntensity+obj.adaptStepIntensity),obj.phases(1),'seesaw');
             obj.testMatrix.base=obj.createGrateMat(0,1,obj.phases(1),'seesaw');  % this create the test grating
-            obj.testMatrix.test.inphase=obj.createGrateMat(obj.testIntensity/2,1, obj.phases(1),'seesaw');  % this create the test grating
-            obj.testMatrix.test.offphase=obj.createGrateMat(obj.testIntensity/2,1, obj.phases(2),'seesaw');  % this create the test grating
-            
+            obj.testMatrix.test.inphase.step=obj.createGrateMat(((obj.meanIntensity+obj.adaptStepIntensity)*obj.testContrast)/2,obj.testContrast/2, obj.phases(1),'seesaw');  % this create the test grating
+            obj.testMatrix.test.offphase.step=obj.createGrateMat(((obj.meanIntensity+obj.adaptStepIntensity)*obj.testContrast)/2,obj.testContrast/2, obj.phases(2),'seesaw');  % this create the test grating
+            obj.testMatrix.test.inphase.tail=obj.createGrateMat((obj.meanIntensity*obj.testContrast)/2,obj.testContrast/2, obj.phases(1),'seesaw');  % this create the test grating
+            obj.testMatrix.test.offphase.tail=obj.createGrateMat((obj.meanIntensity*obj.testContrast)/2,obj.testContrast/2, obj.phases(2),'seesaw');  % this create the test grating
+  
             obj.startMatrix=uint8(obj.adaptMatrix.base+obj.testMatrix.base);
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
         end
@@ -112,9 +114,17 @@ classdef spatialTransferGratingRodLongEpoch < edu.washington.riekelab.protocols.
                 for i=1:length(obj.flashTimes)
                     if time>   obj.flashTimes(i)*1e-3 && time<  (obj.flashTimes(i)+obj.flashDuration)*1e-3
                         if obj.phaseIndex(i)==1
-                            testMat=obj.testMatrix.test.inphase;
+                            if time< obj.stimTime*1e-3
+                                testMat=obj.testMatrix.test.inphase.step;
+                            else
+                                testMat=obj.testMatrix.test.inphase.tail;
+                            end
                         elseif obj.phaseIndex(i)==2
-                            testMat=obj.testMatrix.test.offphase;
+                            if time< obj.stimTime*1e-3
+                                testMat=obj.testMatrix.test.offphase.step;
+                            else
+                                testMat=obj.testMatrix.test.offphase.tail;
+                            end
                         end
                     end
                 end

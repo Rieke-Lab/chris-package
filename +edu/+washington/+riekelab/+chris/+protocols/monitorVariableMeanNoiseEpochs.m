@@ -83,7 +83,7 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             %convert from microns to pixels...
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter); 
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
-            p.setBackgroundColor(obj.meanIntensity(1)); % Set background intensity
+            p.setBackgroundColor(min(obj.meanIntensity)); % Set background intensity
             
             % Create noise stimulus.            
             noiseRect = stage.builtin.stimuli.Rectangle();
