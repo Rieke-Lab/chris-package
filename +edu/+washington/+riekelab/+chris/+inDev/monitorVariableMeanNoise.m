@@ -99,13 +99,12 @@ classdef monitorVariableMeanNoise < edu.washington.riekelab.protocols.RiekeLabSt
                 else %in stim frames
                     periodIndex=randi(50);
                     if mod(frame, obj.frameDwell*obj.framePerPeriod) == 1 %noise update
-                         noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(periodIndex));
+                        noiseStream= RandStream('mt19937ar', 'Seed', obj.noiseSeed(periodIndex));
                     end
-                         intensity = obj.meanIntensityArray(periodIndex)+ obj.meanIntensityArray(periodIndex) ...
-                             ((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
-                    end
-                    
+                    intensity = obj.meanIntensityArray(periodIndex)+ obj.meanIntensityArray(periodIndex)* ...
+                        ((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
                 end
+                
                 i = intensity;
             end
 
