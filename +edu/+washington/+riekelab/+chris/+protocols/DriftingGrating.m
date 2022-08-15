@@ -9,7 +9,7 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
         meanIntensity = 0.5;       % Background light intensity (0-1)
         apertureRadius = 300;            % Aperature radius between inner and outer gratings.
         numDirs=12;
-        psth=true;
+        onlineAnalysis = 'none';
         numberOfAverages = uint16(3)   % Number of repetitions
         amp
     end
@@ -21,6 +21,9 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
         driftSpeedPix
         apertureRadiusPix
         barWidthPix
+        phaseShift
+        onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
+        
     end
     
     methods
@@ -31,16 +34,20 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
         end
         
         function prepareRun(obj)
+            import stage.core.*
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-            obj.showFigure('edu.washington.riekelab.chris.figures.motionFigure',...
-                obj.rig.getDevice(obj.amp),'psth',obj.psth,'preTime',obj.preTime,'stimTime',obj.stimTime);
+            %             obj.showFigure('edu.washington.riekelab.chris.figures.motionFigure',...
+            %                 obj.rig.getDevice(obj.amp),'onlineAnalysis',obj.onlineAnalysis,'preTime',obj.preTime,'stimTime',obj.stimTime);
+
+            obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
+                obj.rig.getDevice(obj.amp), 'recordingType',obj.onlineAnalysis);
             obj.dirList=0: 360/obj.numDirs: (360-360/obj.numDirs);  obj.dirList=obj.dirList(randperm(numel(obj.dirList)));
-            obj.driftSpeedPix = obj.driftSpeed/obj.um2pix;
-            obj.apertureRadiusPix = obj.apertureRadius/obj.um2pix;
-            obj.barWidthPix = obj.barWidth/obj.um2pix;
+            obj.driftSpeedPix =  obj.rig.getDevice('Stage').um2pix(obj.driftSpeed);
+            obj.apertureRadiusPix =  obj.rig.getDevice('Stage').um2pix(obj.apertureRadius);
+            obj.barWidthPix =  obj.rig.getDevice('Stage').um2pix(obj.barWidth);
         end
         
         function prepareEpoch(obj, epoch)
@@ -57,9 +64,8 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
         function p=createPresentation(obj)
             % Open a window in windowed-mode and create a canvas. 'disableDwm' = false for demo only!
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            p=Presentation((obj.preTime+obj.stimTime+obj.tailTime)*1e-3);
+            p=stage.core.Presentation((obj.preTime+obj.stimTime+obj.tailTime)*1e-3);
             p.setBackgroundColor(obj.meanIntensity);
-                     
             grate = stage.builtin.stimuli.Grating('sine');
             grate.orientation = obj.currentDir;
             grate.size = 2*obj.apertureRadiusPix*ones(1,2);
@@ -68,12 +74,13 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
             grate.contrast = obj.contrast;
             grate.color = 2*obj.meanIntensity;
             
+            
             zeroCrossings = 0:(grate.spatialFreq^-1):grate.size(1);
             offsets = zeroCrossings-grate.size(1)/2; %difference between each zero crossing and center of texture, pixels
             [shiftPix, ~] = min(offsets); % min(offsets(offsets>0)); %positive shift in pixels
             phaseShiftRad = (shiftPix/(grate.spatialFreq^-1))*(2*pi); %phaseshift in radians
             obj.phaseShift = 360*(phaseShiftRad)/(2*pi); %phaseshift in degrees
-            grate.phase = obj.phaseShift ; %keep contrast reversing boundary in center
+            grate.phase = obj.phaseShift; %keep contrast reversing boundary in center
             
             gMask = stage.core.Mask.createCircularEnvelope(1024);
             grate.setMask(gMask);
@@ -93,10 +100,10 @@ classdef DriftingGrating < edu.washington.riekelab.protocols.RiekeLabStageProtoc
                 aperture=stage.builtin.stimuli.Rectangle();
                 aperture.position=canvasSize/2;
                 aperture.size=[obj.apertureRadiusPix*2 obj.apertureRadiusPix*2];
-                mask=Mask.createCircularAperture(1,1024);
+                mask=stage.core.Mask.createCircularAperture(1,1024);
                 aperture.setMask(mask);
-                p.addStimulus(aperture);
                 aperture.color=obj.meanIntensity;
+                p.addStimulus(aperture);
             end
             
         end
