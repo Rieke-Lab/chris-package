@@ -4,10 +4,10 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
         preTime = 0 % ms
         stimTime = 2000 % ms, change mean intensity every xxx
         tailTime = 0 % ms
-        apertureDiameter = 300 % um
+        apertureDiameter = 0 % um
         noiseStdv = 0.3 %contrast, as fraction of mean
         meanIntensity = [0.08 0.65]
-        frameDwell = 1 % Frames per noise update
+        frameDwell = 2 % Frames per noise update
         useRandomSeed = true % false = repeated noise trajectory (seed 0)
         onlineAnalysis = 'extracellular'
         numberOfAverages = uint16(200) % number of epochs to queue

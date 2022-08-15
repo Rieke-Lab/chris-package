@@ -1,10 +1,9 @@
 classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     properties
         apertureDiameter=300   % um
-         % um
         flashDuration=50 % ms
         fixFlashTime=100
-         barWidth=[120 30 20 40 80 10]
+        barWidth=[120 30 20 40 80 10]
         variableFlashTime=[50 100 200 400 800]
         adaptContrast=0.5
         testContrast=0.5
@@ -29,7 +28,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         startMatrix
         adaptMatrix
         testMatrix
-       
+        
     end
     
     methods
@@ -45,7 +44,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             %%%%%%%%% need a new online analysis figure later
             obj.showFigure('edu.washington.riekelab.chris.figures.spatialAdaptFigure',...
                 obj.rig.getDevice(obj.amp),'barWidth',obj.barWidth,'variableFlashTimes',obj.variableFlashTime, ...
-                'psth',obj.psth,'coloredBy',obj.phases);         
+                'psth',obj.psth,'coloredBy',obj.phases);
             
             if obj.testContrast<0 && obj.zeroMean
                 obj.testContrast=-((1-obj.adaptContrast)/2);  % this push positive stripes back to mean intensity,
@@ -66,7 +65,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             barWidthIndex=mod((obj.numEpochsCompleted-rem(obj.numEpochsCompleted,length(obj.phases)*length(obj.variableFlashTime)))  ...,
                 /(length(obj.phases)*length(obj.variableFlashTime)),length(obj.barWidth))+1;
             obj.currentBarWidth=obj.barWidth(barWidthIndex);
-                                                                                                                                                                                                                                                                        
+            
             % create matrix for adapting and flashing
             obj.adaptMatrix.base=obj.createGrateMat(obj.meanIntensity,0,0,'seesaw');
             if obj.zeroMean
@@ -91,7 +90,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             apertureDiameterPix =obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(obj.meanIntensity); % Set background intensity
-               
+            
             obj.startMatrix=uint8(obj.startMatrix);
             scene=stage.builtin.stimuli.Image(obj.startMatrix);
             scene.size = [apertureDiameterPix  apertureDiameterPix]; %scale up to canvas size
@@ -100,11 +99,11 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             scene.setMinFunction(GL.LINEAR);
             scene.setMagFunction(GL.LINEAR);
             p.addStimulus(scene);
-
+            
             sceneController = stage.builtin.controllers.PropertyController(scene, 'imageMatrix',...
                 @(state) obj.getImgMatrix( state.time));
             p.addController(sceneController);
-
+            
             % add aperture
             if obj.apertureDiameter>0
                 aperture=stage.builtin.stimuli.Rectangle();
@@ -115,9 +114,9 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
                 p.addStimulus(aperture);
                 aperture.color=obj.meanIntensity;
             end
-                              
+            
         end
-                
+        
         function [imgMat] = getImgMatrix(obj,time)
             if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
                 adaptMat=obj.adaptMatrix.base;
@@ -137,7 +136,7 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
             end
             imgMat=uint8(imgMat);
         end
-               
+        
         function [sinewave2D] = createGrateMat(obj,meanIntensity,contrast,phase,mode)
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
             currentBarWidthPix=ceil(obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth));
@@ -156,8 +155,8 @@ classdef spatialTransferGratingChris < edu.washington.riekelab.protocols.RiekeLa
         
         function tf = shouldContinueRun(obj)
             tf = obj.numEpochsCompleted <obj.numberOfAverages* length(obj.phases)*length(obj.barWidth)*length(obj.variableFlashTime);
-
-        end 
+            
+        end
     end
 end
 
