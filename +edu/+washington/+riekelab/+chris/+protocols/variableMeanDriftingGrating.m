@@ -5,8 +5,7 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
         spatialContrast = 0.9            % Center grating contrast (0-1)
         orientation = 0                 % Center orientation (deg)
         barWidths = [40 150]             % Center bar width (pix)
-        centerRadius = 150              % Center radius (pix)
-        maskDiameter = 0           % Surround radius (pix)
+        apertureDiameter = 800           % Surround radius (pix)
         temporalFrequency = 4.0         % Grating temporal frequency (Hz)
         spatialClass = 'sinewave'       % Grating spatial type
         meanIntensities = [0.05 0.5]       % Background light intensity (0-1)
@@ -24,31 +23,25 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
     end
     
     methods
+        
         function didSetRig(obj)
             didSetRig@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             [obj.amp, obj.ampType] = obj.createDeviceNamesProperty('Amp');
         end
         
         function prepareRun(obj)
-            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-            
-            if length(obj.surroundContrasts) > 1
-                colors = pmkmp(length(obj.meanIntensity)*length(obj.barWidths),'CubicYF');
-            else
-                colors = [0 0 0];
-            end
+            import stage.core.*
+            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj); 
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('manookinlab.figures.MeanResponseFigure', ...
-                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
-                'sweepColor',colors,'groupBy',{'meanIntensity','barWidths'});
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-            
-            %%%%%%%%% need a new online analysis figure
-            obj.showFigure('edu.washington.riekelab.chris.figures.varMeanDriftGratingFigure',...
-                obj.rig.getDevice(obj.amp),'barWidths',obj.barWidths,'meanIntensities',obj.meanIntensities, ...
-                'onlineAnalysis',obj.onlineAnalysis,'coloredBy',obj.currentMeanInteisty);
+            obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
+                obj.rig.getDevice(obj.amp), 'recordingType',obj.onlineAnalysis);
+%             %%%%%%%%% need a new online analysis figure
+%             obj.showFigure('edu.washington.riekelab.chris.figures.varMeanDriftGratingFigure',...
+%                 obj.rig.getDevice(obj.amp),'barWidths',obj.barWidths,'meanIntensities',obj.meanIntensities, ...
+%                 'onlineAnalysis',obj.onlineAnalysis,'coloredBy',obj.currentMeanIntensity);
         end
         
         function prepareEpoch(obj, epoch)
@@ -58,8 +51,8 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
             
-            meanLumIndex = rem(obj.numEpochsPrepared,length(obj.meanIntensities))+1;  
-            barWidthIndex=  numel(obj.barWidths)-rem(((obj.numEpochsPrepared-rem(obj.numEpochsPrepared, ...
+            meanLumIndex = numel(obj.meanIntensities)-rem(obj.numEpochsPrepared,length(obj.meanIntensities));
+            barWidthIndex=  numel(obj.barWidths)-rem(((obj.numEpochsCompleted-mod(obj.numEpochsCompleted, ...
                 length(obj.barWidths)))/numel(obj.barWidths)+1),numel(obj.barWidths));
             obj.currentBarWidth=obj.barWidths(barWidthIndex);
             obj.currentMeanIntensity=obj.meanIntensities(meanLumIndex);
@@ -68,12 +61,12 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
         end
         
         function p = createPresentation(obj)
-            p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3);
-            p.setBackgroundColor(obj.meanIntensity(0));
+            p = stage.core.Presentation((obj.stimTime) * 1e-3);
+            p.setBackgroundColor(0);
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            maskDiameterPix = round(obj.rig.getDevice('Stage').um2pix(obj.maskDiameter/2))*2;
+            apertureDiameterPix = round(obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter/2))*2;
             currentBarWidthPix = obj.rig.getDevice('Stage').um2pix(obj.currentBarWidth);
-            
+
             % Create the center grating.
             switch obj.spatialClass
                 case 'sinewave'
@@ -82,7 +75,7 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
                     grate = stage.builtin.stimuli.Grating('square');
             end
             grate.orientation = obj.orientation;
-            grate.size = maskDiameterPix*ones(1,2);
+            grate.size = apertureDiameterPix*ones(1,2);
             grate.position = canvasSize/2;
             grate.spatialFreq = 1/(2*currentBarWidthPix); %convert from bar width to spatial freq
             grate.contrast = obj.spatialContrast;
@@ -93,32 +86,30 @@ classdef variableMeanDriftingGrating < edu.washington.riekelab.protocols.RiekeLa
             phaseShift_rad = (shiftPix/(grate.spatialFreq^-1))*(2*pi); %phaseshift in radians
             obj.phaseShift = 360*(phaseShift_rad)/(2*pi); %phaseshift in degrees
             grate.phase = obj.phaseShift; % keep contrast reversing boundary in center
-            
             % Add the grating.
             p.addStimulus(grate);
-            
+       
             %--------------------------------------------------------------
             % Control the grating phase.
             grateController = stage.builtin.controllers.PropertyController(grate, 'phase',...
-                @(state)setDriftingGrating(obj, state.time - obj.preTime * 1e-3, obj.phaseShift));
+                @(state)setDriftingGrating(obj, state.time));
             p.addController(grateController);
             
             % Make the grating visible only during the stimulus time.
             grateVisible = stage.builtin.controllers.PropertyController(grate, 'visible', ...
-                @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
+                @(state) state.time < obj.stimTime* 1e-3);
             p.addController(grateVisible);
             
             % add aperture
-            if obj.maskDiameter>0
+            if obj.apertureDiameter>0
                 aperture=stage.builtin.stimuli.Rectangle();
                 aperture.position=canvasSize/2;
-                aperture.size=[maskDiameterPix maskDiameterPix];
+                aperture.size=[apertureDiameterPix apertureDiameterPix];
                 mask=stage.core.Mask.createCircularAperture(1,1024);
                 aperture.setMask(mask);
                 p.addStimulus(aperture);
                 aperture.color=obj.currentMeanIntensity;
             end
-            
             % Set the drifting grating.
             function phase = setDriftingGrating(obj, time)
                 if time >= 0
