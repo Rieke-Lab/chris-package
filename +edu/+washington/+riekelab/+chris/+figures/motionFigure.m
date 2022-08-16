@@ -1,7 +1,7 @@
 classdef motionFigure < symphonyui.core.FigureHandler
     properties (SetAccess = private)
         device
-        psth
+        onlineAnalysis
         preTime
         stimTime
     end
@@ -16,15 +16,14 @@ classdef motionFigure < symphonyui.core.FigureHandler
     
     methods
         function obj = motionFigure(device, varargin)
-            
             ip = inputParser();
-            ip.addParameter('psth', true, @(x)islogical(x));
+            ip.addParameter('onlineAnalysis', 'extracellular', @(x)ischar(x));
             ip.addParameter('preTime',0.0, @(x)isfloat(x));
             ip.addParameter('stimTime',0.0, @(x)isfloat(x));
             ip.parse(varargin{:});
             
             obj.device = device;
-            obj.psth = ip.Results.psth;
+            obj.onlineAnalysis = ip.Results.onlineAnalysis;
             obj.preTime = ip.Results.preTime;
             obj.stimTime = ip.Results.stimTime;
             
@@ -32,15 +31,13 @@ classdef motionFigure < symphonyui.core.FigureHandler
         end
         
         function createUi(obj)
+
             import appbox.*;           
             obj.axesHandle = axes( ...
                 'Parent', obj.figureHandle, ...
                 'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'), ...
                 'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
                 'XTickMode', 'auto');
-            xlabel(obj.axesHandle, 'orientation');
-            ylabel(obj.axesHandle, 'response');
-            obj.setTitle('orientation');
         end
         
         function handleEpoch(obj, epoch)         
@@ -52,17 +49,17 @@ classdef motionFigure < symphonyui.core.FigureHandler
             prePts = sampleRate*obj.preTime/1000;
             stimPts = sampleRate*obj.stimTime/1000;
             preScaleFactor = stimPts / prePts;
-            
-            if obj.psth
+
+            if strcmp(obj.onlineAnalysis,'extracellular')
                 epochResponseTrace = epochResponseTrace(1:prePts+stimPts);
                 %count spikes
-                S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace);
+                S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace,[],sampleRate);
                 newEpochResponse = sum(S.sp > prePts); %spike count during stim
                 newBaseline = preScaleFactor * sum(S.sp < prePts); %spike count before stim, scaled by length
             else
-                if mean(epochResponseTrace)<0  %measuring exc
+                if strcmp(obj.onlineAnalysis,'exc')  %measuring exc
                     chargeMult = -1;
-                elseif  mean(epochResponseTrace)>0%measuring inh
+                elseif  strcmp(obj.onlineAnalysis,'inh') %measuring inh
                     chargeMult = 1;
                 end
                 epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:prePts)); %baseline adjustment
