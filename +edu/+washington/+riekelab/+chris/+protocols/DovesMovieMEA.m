@@ -169,7 +169,7 @@ classdef DovesMovieMEA< edu.washington.riekelab.protocols.RiekeLabStageProtocol
             
             if length(unique(obj.stimulusIndices)) > 1
                 % Set the current stimulus trajectory.
-                obj.stimulusIndex = obj.stimulusIndices(mod((obj.numEpochsCompleted-3-rem(obj.numEpochsCompleted-3,2))/2,...
+                obj.stimulusIndex = obj.stimulusIndices(mod((obj.numEpochsCompleted-obj.numberOfAverages-rem(obj.numEpochsCompleted-obj.numberOfAverages,2))/2,...
                     length(obj.stimulusIndices))+1);
                 obj.getImageSubject();
             end
