@@ -1,18 +1,19 @@
-classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef EyeMovementTrajectoryWithMeanJump < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
     properties
         preTime = 200 % ms
         stimTime = 4000 % ms
         tailTime = 200 % ms
         imageName = '00152' %van hateren image names
-        patchMean = 'all'
-        apertureDiameter = 0 % um
+        meanIntensity=[0.1 0.5]
+        apertureDiameter = 300 % um
         randomSeed = 1 % for eye movement trajectory
         D = 5; % Drift diffusion coefficient, in microns
-        backgroundScale = 0.1; % scale factor for background relative to image mean
-        onlineAnalysis = 'none'
-        numberOfAverages = uint16(5) % number of epochs to queue
+        onlineAnalysis = 'extracellular'
+        patchMean='positive'    
+        numberOfAverages = uint16(7) % number of epochs to queue
         amp % Output amplifier
+
     end
     
     properties (Hidden)
@@ -32,6 +33,8 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
         p0
         xTraj_save
         yTraj_save
+        currentIntensity
+        stimulusIndex
     end
 
     methods
@@ -45,30 +48,39 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
-                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis);
+%             obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
+%                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis);
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
 
             % get current image and stim (library) set:
-            resourcesDir = 'C:\Users\Public\Documents\turner-package\resources\';
-            obj.currentImageSet = '/VHsubsample_20160105';
+            resourcesDir = 'C:\Users\Fred Rieke\Documents\chris-package\+edu\+washington\+riekelab\+chris\+resources\';
+            obj.currentImageSet = '\VHsubsample_20160105';
             obj.currentStimSet = 'SaccadeLocationsLibrary_20171011';
             load([resourcesDir,obj.currentStimSet,'.mat']);
             fieldName = ['imk', obj.imageName];
             
             %load appropriate image...
-            obj.currentStimSet = '/VHsubsample_20160105';
-            fileId=fopen([resourcesDir, obj.currentImageSet, '/imk', obj.imageName,'.iml'],'rb','ieee-be');
+            obj.currentStimSet = '\VHsubsample_20160105';
+            fileId=fopen([resourcesDir, obj.currentImageSet, '\imk', obj.imageName,'.iml'],'rb','ieee-be');
             img = fread(fileId, [1536,1024], 'uint16');
-            img = double(img);
+            
+            img = double(img');
             img = (img./max(img(:))); %rescale s.t. brightest point is maximum monitor level
-            img = img.*255; %rescale s.t. brightest point is maximum monitor level
-            obj.imageMatrix = uint8(img');
+            img=(img-mean(img(:)))/mean(img(:)); % contrast image 
+            obj.imageMatrix.low=img*obj.meanIntensity(1)+ obj.meanIntensity(1);
+            obj.imageMatrix.high=img*obj.meanIntensity(2)+ obj.meanIntensity(2);
+            obj.imageMatrix.low=uint8(obj.imageMatrix.low'.*255);
+            obj.imageMatrix.high=uint8(obj.imageMatrix.high'.*255);
+            %limit the intensity between 0 and 255 
+            obj.imageMatrix.low(obj.imageMatrix.low<0)=0;
+            obj.imageMatrix.high(obj.imageMatrix.high<0)=0;
+            obj.imageMatrix.low(obj.imageMatrix.low>255)=255;
+            obj.imageMatrix.high(obj.imageMatrix.high>2550)=255;
 
             %1) restrict to desired patch mean luminance:
             imageMean = imageData.(fieldName).imageMean;
-            obj.backgroundIntensity = imageMean * obj.backgroundScale;%set the mean to the mean over the image with scale factor
+            obj.backgroundIntensity = imageMean;%set the mean to the mean over the image
             locationMean = imageData.(fieldName).patchMean;
             
             if strcmp(obj.patchMean,'all')
@@ -82,11 +94,6 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             drawInd = randsample(inds,1);
             obj.p0(1) = imageData.(fieldName).location(drawInd,1);
             obj.p0(2) = imageData.(fieldName).location(drawInd,2);
-
-            %size of the stimulus on the prep:
-            stimSize = obj.rig.getDevice('Stage').getCanvasSize() .* obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel'); %um
-            %scalingFactor: 3.3 for 1 arcmin/VH pixel (like DOVES), based
-            %on 198 um/degree on monkey retina
             
             % make eye movement trajectory.
             rng(obj.randomSeed); %set random seed for fixation draw
@@ -127,6 +134,24 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             obj.yTraj = obj.yTraj ./obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel');
         end
         
+        
+        function prepareEpoch(obj, epoch)
+            prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
+            
+            device = obj.rig.getDevice(obj.amp);
+            duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
+            epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
+            epoch.addResponse(device);
+            obj.stimulusIndex=mod(obj.numEpochsCompleted,2)+1;
+            epoch.addParameter('currentIntensity', obj.meanIntensity(obj.stimulusIndex));
+            epoch.addParameter('backgroundIntensity', obj.backgroundIntensity);
+            epoch.addParameter('randomSeed', obj.randomSeed);
+            epoch.addParameter('currentStimSet',obj.currentStimSet);
+            epoch.addParameter('currentImageSet',obj.currentImageSet);
+            epoch.addParameter('xTraj',obj.xTraj_save);
+            epoch.addParameter('yTraj',obj.yTraj_save);
+        end
+        
         function p = createPresentation(obj)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
             
@@ -134,14 +159,18 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3);
             p.setBackgroundColor(obj.backgroundIntensity);
-
-            scene = stage.builtin.stimuli.Image(obj.imageMatrix);
+            if obj.stimulusIndex==1
+                currentMatrix=obj.imageMatrix.low;
+            else
+                currentMatrix=obj.imageMatrix.high;
+            end
+            scene = stage.builtin.stimuli.Image(currentMatrix);
             %scale up image for canvas. Now image pixels and canvas pixels
             %are the same size. Also image size is in rows (y), cols (x)
             %but stage sizes are in x, y
             %canvasPix = (VHpix) * (um/VHpix)/(um/canvasPix)
-            scene.size = [size(obj.imageMatrix,2) * (3.3)/obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel'),...
-                size(obj.imageMatrix,1) * (3.3)/obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel')];
+            scene.size = [size(currentMatrix,2) * (3.3)/obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel'),...
+                size(currentMatrix,1) * (3.3)/obj.rig.getDevice('Stage').getConfigurationSetting('micronsPerPixel')];
             
             tempY = obj.p0(2); %swap row/column for y/x
             tempX = obj.p0(1);
@@ -187,8 +216,7 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             if (obj.apertureDiameter > 0) %% Create aperture
                 aperture = stage.builtin.stimuli.Rectangle();
                 aperture.position = canvasSize/2;
-%                 aperture.color = obj.backgroundIntensity;
-                aperture.color=0;
+                aperture.color = obj.backgroundIntensity;
                 aperture.size = 2.*[max(canvasSize) max(canvasSize)];
                 mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/(2*max(canvasSize)), 1024); %circular aperture
                 aperture.setMask(mask);
@@ -196,31 +224,17 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             end
         end
 
-        function prepareEpoch(obj, epoch)
-            prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
-            
-            device = obj.rig.getDevice(obj.amp);
-            duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
-            epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
-            epoch.addResponse(device);
-            
-            epoch.addParameter('backgroundIntensity', obj.backgroundIntensity);
-            epoch.addParameter('randomSeed', obj.randomSeed);
-            epoch.addParameter('currentStimSet',obj.currentStimSet);
-            epoch.addParameter('currentImageSet',obj.currentImageSet);
-            epoch.addParameter('xTraj',obj.xTraj_save);
-            epoch.addParameter('yTraj',obj.yTraj_save);
-        end
+
         
 % %         %same presentation each epoch in a run. Replay.
-% %         function controllerDidStartHardware(obj)
-% %             controllerDidStartHardware@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
-% %             if (obj.numEpochsCompleted >= 1) && (obj.numEpochsCompleted < obj.numberOfAverages)
-% %                 obj.rig.getDevice('Stage').replay
-% %             else
-% %                 obj.rig.getDevice('Stage').play(obj.createPresentation());
-% %             end
-% %         end
+%         function controllerDidStartHardware(obj)
+%             controllerDidStartHardware@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
+%             if (obj.numEpochsCompleted >2) && (obj.numEpochsCompleted < obj.numberOfAverages)
+%                 obj.rig.getDevice('Stage').replay
+%             else
+%                 obj.rig.getDevice('Stage').play(obj.createPresentation());
+%             end
+%         end
         
         function tf = shouldContinuePreparingEpochs(obj)
             tf = obj.numEpochsPrepared < obj.numberOfAverages;
