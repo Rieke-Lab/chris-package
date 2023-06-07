@@ -42,13 +42,15 @@ classdef FlashedSkewPizza< edu.washington.riekelab.protocols.RiekeLabStageProtoc
 
             % pre-generate the imageMatrix 
 
-            [obj.intensitySequences, obj.skewList] = edu.washington.riekelab.chris.utils.generateSkewedIntensitySeq(obj.meanInt, obj.contrast, obj.numSlices,obj.numOfRankedSkewness);
+            [obj.intensitySequences, obj.skewList] = edu.washington.riekelab.chris.utils.generateSkewedIntensitySeq(obj.meanIntensity, obj.contrast, obj.numOfSlices,obj.numOfRankedSkewness);
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
                 'groupBy',{'currentSkewness'});
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
+            obj.canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
+
         end
         
         function prepareEpoch(obj, epoch)
@@ -60,17 +62,18 @@ classdef FlashedSkewPizza< edu.washington.riekelab.protocols.RiekeLabStageProtoc
             rotInd=mod(obj.numEpochsCompleted, numel(obj.rotationJitter))+1;
             obj.currentRotation=obj.rotationJitter(rotInd);
             % set the current intensity sequence for the pizzas
-            skewInd=(obj.numEpochsCompleted-mod(obj.numEpochsCompleted, numel(obj.rotationJitter)))/numel(numel(obj.rotationJitter))+1;
-            skewInd=mod(skewInd, numel(obj.numOfRankedSkewness))+1;
-            obj.currentIntensitySequence=obj.intensitySequences(skewInd);
-            obj.canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
-            obj.currentImageMatrix =edu.washington.riekelab.chris.utils.makeSplitPizzas(obj.canvasSize,obj.numSlices, obj.currentRotation,obj.currentIntensitySequence);
+            skewInd=(obj.numEpochsPrepared-rotInd)/numel(obj.rotationJitter)+1;
+            skewInd=mod(skewInd,obj.numOfRankedSkewness); if skewInd==0 skewInd=obj.numOfRankedSkewness; end
+            obj.currentIntensitySequence=obj.intensitySequences(:,skewInd);
+            obj.currentImageMatrix =edu.washington.riekelab.chris.utils.makeSplitPizzas(max(obj.canvasSize),obj.numOfSlices, obj.currentRotation,obj.currentIntensitySequence);
             obj.currentImageMatrix = obj.currentImageMatrix.*255; %rescale s.t. brightest point is maximum monitor level
             obj.currentImageMatrix = uint8(obj.currentImageMatrix);
 
             epoch.addParameter('currentRotation', obj.currentRotation);
             epoch.addParameter('currentIntensitySequence', obj.currentIntensitySequence);
             epoch.addParameter('currentSkewness', obj.skewList(skewInd));
+            fprintf('%s %d %s %d %s %d %s %f %s %f %s %f \n','epoch:', obj.numEpochsPrepared, ' skew#:', skewInd, ' rot #', rotInd, ' mean::', mean( obj.currentIntensitySequence), ...
+                ' var::', var( obj.currentIntensitySequence), ' skew::', skewness( obj.currentIntensitySequence));
         end
         
         function p = createPresentation(obj)
@@ -103,11 +106,11 @@ classdef FlashedSkewPizza< edu.washington.riekelab.protocols.RiekeLabStageProtoc
         end
         
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < obj.numberOfAverages*numel(obj.numOfRankedSkewness)*numel(obj.rotationJitter);
+            tf = obj.numEpochsPrepared < obj.numberOfAverages*obj.numOfRankedSkewness*numel(obj.rotationJitter);
         end
         
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < obj.numberOfAverages*numel(obj.numOfRankedSkewness)*numel(obj.rotationJitter);
+            tf = obj.numEpochsCompleted < obj.numberOfAverages*obj.numOfRankedSkewness*numel(obj.rotationJitter);
         end
 
     end

@@ -32,7 +32,7 @@ classdef ExpandingPizza< edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-
+            obj.canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
             % pre-generate the imageMatrix
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             % to do, add expanding skewness figure; similar to expanding
@@ -53,11 +53,10 @@ classdef ExpandingPizza< edu.washington.riekelab.protocols.RiekeLabStageProtocol
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
             epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
             epoch.addResponse(device);
-            obj.canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
             pizzaInd=mod(obj.numEpochsCompleted, numel(obj.slices))+1;
             obj.currentSliceNumber=obj.slices(pizzaInd);
-            currentIntensitySequence= repmat(obj.contrast*[1 -1],1, obj.currentSliceNumber/2);
-            obj.currentImageMatrix =edu.washington.riekelab.chris.utils.makeSplitPizzas(obj.canvasSize,obj.currentSliceNumber,0,currentIntensitySequence);
+            currentIntensitySequence= repmat(obj.contrast*[1 -1],1, obj.currentSliceNumber/2)*obj.meanIntensity+obj.meanIntensity;
+            obj.currentImageMatrix =edu.washington.riekelab.chris.utils.makeSplitPizzas(max(obj.canvasSize),obj.currentSliceNumber,0,currentIntensitySequence);
             obj.currentImageMatrix = obj.currentImageMatrix.*255; %rescale s.t. brightest point is maximum monitor level
             obj.currentImageMatrix = uint8(obj.currentImageMatrix);
             epoch.addParameter('currentSliceNumber', obj.currentSliceNumber);
@@ -68,8 +67,6 @@ classdef ExpandingPizza< edu.washington.riekelab.protocols.RiekeLabStageProtocol
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3);
             p.setBackgroundColor(obj.backgroundIntensity);
             apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
-
-
             scene = stage.builtin.stimuli.Image(obj.currentImageMatrix);
             scene.size = obj.canvasSize; %scale up to canvas size
             scene.position = obj.canvasSize/2;

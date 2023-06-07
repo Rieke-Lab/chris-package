@@ -25,11 +25,11 @@ for i = 1:numSlices
     dist=sqrt((Y - centerY).^2+ (X - centerX).^2);
 
     % Determine the pixels within the current wedge
-    wedgePixels = (angle > startAngle) & (angle <= endAngle);
+    wedgePixels = (angle >= startAngle) & (angle <= endAngle);
     %         wedgePixels = (angle > startAngle) & (angle <= endAngle) & dist<sz/2;
 
     % Set the intensity value for the pixels within the wedge
-    temp(wedgePixels) = intensitySequence(i);
+    canvas(wedgePixels) = intensitySequence(i);
 end
 
 end
