@@ -39,6 +39,12 @@ classdef ExpandingPizza< edu.washington.riekelab.protocols.RiekeLabStageProtocol
             % spots figures
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
+
+            if ~strcmp(obj.onlineAnalysis,'none')
+                obj.showFigure('edu.washington.riekelab.chris.figures.ExpandingPizzaFigure',...
+                    obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
+                    'preTime',obj.preTime,'stimTime',obj.stimTime);
+            end
         end
 
         function prepareEpoch(obj, epoch)
