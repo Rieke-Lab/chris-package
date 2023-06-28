@@ -1,15 +1,17 @@
-classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef EyeMovementTrajectoryMeanStep < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
     properties
         preTime = 200 % ms
         stimTime = 4000 % ms
         tailTime = 200 % ms
         imageName = '00152' %van hateren image names
+        patchMean = 'positive'
+        movieMean=0.5 
         apertureDiameter = 0 % um
         randomSeed = 1 % for eye movement trajectory
         D = 5; % Drift diffusion coefficient, in microns
-        onlineAnalysis = 'none'
-        patchMean='all'
+        backgroundScale = 0.1; % scale factor for background relative to image mean
+        onlineAnalysis = 'extracellular'
         numberOfAverages = uint16(5) % number of epochs to queue
         amp % Output amplifier
     end
@@ -41,35 +43,36 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
         end
 
         function prepareRun(obj)
-            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-            
+            prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);          
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
+            obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis);
-            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
+            obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
 
             % get current image and stim (library) set:
-            resourcesDir = 'C:\Users\Fred Rieke\Documents\chris-package\+edu\+washington\+riekelab\+chris\+resources\';
-            obj.currentImageSet = '\VHsubsample_20160105';
+            resourcesDir = 'C:\Users\Public\Documents\turner-package\resources\';
+            obj.currentImageSet = '/VHsubsample_20160105';
             obj.currentStimSet = 'SaccadeLocationsLibrary_20171011';
             load([resourcesDir,obj.currentStimSet,'.mat']);
             fieldName = ['imk', obj.imageName];
             
             %load appropriate image...
-            obj.currentStimSet = '\VHsubsample_20160105';
-            fileId=fopen([resourcesDir, obj.currentImageSet, '\imk', obj.imageName,'.iml'],'rb','ieee-be');
+            obj.currentStimSet = '/VHsubsample_20160105';
+            fileId=fopen([resourcesDir, obj.currentImageSet, '/imk', obj.imageName,'.iml'],'rb','ieee-be');
             img = fread(fileId, [1536,1024], 'uint16');
             img = double(img);
-            img = (img./max(img(:))); %rescale s.t. brightest point is maximum monitor level
+            %change to contrast image and set mean 
+            img=(img-mean2(img))/max(img(:));  % contrast 
+            img=img.*obj.movieMean+obj.movieMean; 
+            img(img<0)=0; img(img>1)=1;  % 
             img = img.*255; %rescale s.t. brightest point is maximum monitor level
             obj.imageMatrix = uint8(img');
 
+            obj.backgroundIntensity = obj.movieMean * obj.backgroundScale;%set the mean to the mean over the image with scale factor
             %1) restrict to desired patch mean luminance:
-            imageMean = imageData.(fieldName).imageMean;
-            obj.backgroundIntensity = imageMean;%set the mean to the mean over the image
             locationMean = imageData.(fieldName).patchMean;
-            
+            imageMean = imageData.(fieldName).imageMean;
             if strcmp(obj.patchMean,'all')
                 inds = 1:length(locationMean);
             elseif strcmp(obj.patchMean,'positive')
@@ -186,7 +189,9 @@ classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStage
             if (obj.apertureDiameter > 0) %% Create aperture
                 aperture = stage.builtin.stimuli.Rectangle();
                 aperture.position = canvasSize/2;
-                aperture.color = obj.backgroundIntensity;
+%                 aperture.color = obj.backgroundIntensity;
+                aperture.color = 0;
+
                 aperture.size = 2.*[max(canvasSize) max(canvasSize)];
                 mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/(2*max(canvasSize)), 1024); %circular aperture
                 aperture.setMask(mask);
