@@ -7,11 +7,9 @@ classdef ModulatedGaussianTextureWithMean < manookinlab.protocols.ManookinLabSta
         spatialContrast = 0.3                  % Contrast (0 - 1)
         temporalContrast=0.3
         textureSigma = 30:80:500           % Standard deviations (um)
-        meanIntensities=[0.03 0.1 0.3]
+        meanIntensities=[0.04 0.4]
         frameDwell=2
-        randomSeed = False               % Random or repeating seed
-        randomSigmaSequence = true           % Random or repeated sequence
-        numberOfAverages = uint16(40)   % Number of epochs
+        numberOfAverages = uint16(200)   % Number of epochs
     end
     
     properties (Hidden)
@@ -33,12 +31,12 @@ classdef ModulatedGaussianTextureWithMean < manookinlab.protocols.ManookinLabSta
         
         function prepareRun(obj)
             prepareRun@manookinlab.protocols.ManookinLabStageProtocol(obj);      
-            % create the array of texture matrix, ( each matrix is already contrast image with mean zeros and defined spatial contrast)
+            % create the array of texture matrix, ( each matrix is already contrast image with mean at 0.5 of max intensity and defined spatial contrast)
             canvasSize = obj.rig.getDevice('Stage').getCanvasSize();
             canvasSizePix=obj.rig.getDevice('Stage').um2pix(max(canvasSize));
             for i=1:numel(obj.textureSigma)
                 currentSigmaPix=obj.rig.getDevice('Stage').um2pix(obj.textureSigma(i));
-                textureMatrix{i} = util.generateTexture(canvasSizePix,currentSigmaPix, obj.spatialContrast);
+                textureMatrix{i} = util.generateTexture(canvasSizePix,currentSigmaPix, obj.spatialContrast)+0.5;
             end
             obj.sigmaSequence=randperm(numel(obj.textureSigma));
                         % assuming frame rate at 60 Hz 
@@ -47,8 +45,8 @@ classdef ModulatedGaussianTextureWithMean < manookinlab.protocols.ManookinLabSta
             obj.intensityOverFrame=zeros(numel(meanIntensities),framePerPeriod);
             noiseStream= RandStream('mt19937ar', 'Seed', 1);
             for i=1:numel(obj.meanIntensities)
-                obj.intensityOverFrame(i,1:framePerPeriod)= obj.meanIntensities(i)*...
-                    obj.temporalContrast * noiseStream.randn(1, framePerPeriod);
+                obj.intensityOverFrame(i,1:framePerPeriod)= obj.meanIntensities(i)*(1+...
+                    obj.temporalContrast * noiseStream.randn(1, framePerPeriod));
             end
         end
         
@@ -76,34 +74,29 @@ classdef ModulatedGaussianTextureWithMean < manookinlab.protocols.ManookinLabSta
             p.addController(gridVisible);
           
         end
+        noiseValue = stage.builtin.controllers.PropertyController(noiseRect, 'color',...
+            @(state)getNoiseIntensity(obj,state.frame - preFrames, obj.intensityOverFrame));
+        p.addController(noiseValue); %add the controller
 
-        function [imgMat] = getImgIntensity(obj,time)
-            if time<obj.preTime*1e-3 || time>(obj.preTime+obj.stimTime)*1e-3
-                adaptMat=obj.adaptMatrix.base;
-            else
-                adaptMat=obj.adaptMatrix.test;
+        function i = getNoiseIntensity(obj, frame,internsityArrays)
+            persistent intensity;
+            if frame<0 %pre frames. frame 0 starts stimPts
+                intensity = obj.meanIntensityArray(1);
+            else %in stim frames
+                if mod(frame, obj.frameDwell) == 0 %noise update
+                    intensity = internsityArrays((frame-mod(frame,obj.frameDwell))/obj.frameDwell+1) ;
+                end                  
             end
-            testMat=obj.testMatrix.base;
-            for i=1:length(obj.flashTimes)
-                if time>obj.flashTimes(i)*1e-3 && time< (obj.flashTimes(i)+obj.flashDuration)*1e-3
-                    testMat=obj.testMatrix.test;
-                end
-            end
-            imgMat=adaptMat+testMat;
-            if max(imgMat(:))>255 || min(imgMat(:))<0
-                imgMat(imgMat>255)=255;  imgMat(imgMat<0)=0; 
-                disp(['max__' num2str(max(imgMat(:))) '__min__' num2str(min(imgMat(:)))]);
-                error('img matrix intensity out of range');
-            end
-            imgMat=uint8(imgMat);
+            i = intensity;
         end
+
         
         function prepareEpoch(obj, epoch)
             prepareEpoch@manookinlab.protocols.ManookinLabStageProtocol(obj, epoch);
             currentSigmaIndex
             currentMeanIndex 
             obj.currentTexture=obj.textureMatrix{currentSigmaIndex}; 
-            obj.currentTexture=uint8( obj.currentTexture*obj.meanIntensities(currentMeanIndex)*255)
+            obj.currentTexture=uint8(obj.currentTexture*255)
             obj.currentIntensitySequence=obj.intensityOverFrame(currentMeanIndex,:);
             % Save the seed.
             epoch.addParameter('currentSigma', obj.currentSigmaIndex(currentSigmaIndex));
