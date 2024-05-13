@@ -12,12 +12,14 @@ classdef variableMeanFlash < edu.washington.riekelab.protocols.RiekeLabStageProt
         meanIntensity = [0.03 0.06 0.12 0.18 0.24 0.36 0.54]       % Background light intensity (0-1)
         numberOfAverages = uint16(10)    % Number of epochs
         interpulseInterval = 0          % Duration between spots (s)
+        onlineAnalysis = 'none'
     end
     
     properties (Hidden)
         ampType
         currentMean
         currentContrast
+        onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', {'none', 'extracellular', 'exc', 'inh'})
     end
     
     methods
@@ -40,7 +42,12 @@ classdef variableMeanFlash < edu.washington.riekelab.protocols.RiekeLabStageProt
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             % add the progress bar.
+            colors=edu.washington.riekelab.turner.utils.pmkmp(20,'IsoL');
+            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.figures.FrameTimingFigure', obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
+            obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
+                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
+                'groupBy',{'currentMean','currentContrast'},'sweepColor',colors);
         end
         
         function prepareEpoch(obj, epoch)
