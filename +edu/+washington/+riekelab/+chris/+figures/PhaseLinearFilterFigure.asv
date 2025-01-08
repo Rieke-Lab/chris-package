@@ -132,9 +132,6 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
             ylabel(obj.axesHandle(2), 'Measured');
             title(obj.axesHandle(2),'Phase-specific nonlinearities');
 
-            legend(obj.axesHandle(1), 'show');
-            legend(obj.axesHandle(2), 'show');
-
             obj.figureHandle.Name = obj.figureTitle;
         end
 
@@ -250,7 +247,7 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
                     obj.risingLineHandle = line(obj.filterTimes, obj.risingFilter,...
                         'Parent', obj.axesHandle(1),'LineWidth',2,'Color','r',...
                         'DisplayName','Rising Phase');
-                    obj.fallingLineHandle = line(obj.filterTimes, obj.fallingFilter,...
+                    obj.fallingLineHandle = line(filterTimes, obj.fallingFilter,...
                         'Parent', obj.axesHandle(1),'LineWidth',2,'Color','b',...
                         'DisplayName','Falling Phase');
                 else
@@ -301,12 +298,12 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
                 if ~isempty(obj.allNoiseOnlyStimuli)
                     % Noise-only filter
                     obj.noiseOnlyFilter = edu.washington.riekelab.chris.utils.getLinearFilterOnline(...
-                        obj.allNoiseOnlyStimuli, obj.allNoiseOnlyResponses, obj.updateRate, freqCutoffFraction*obj.updateRate);
-                    obj.noiseOnlyFilter = obj.noiseOnlyFilter(1:obj.filterPts);
+                        obj.allNoiseOnlyStimuli, obj.allNoiseOnlyResponses, updateRate, freqCutoffFraction*updateRate);
+                    obj.noiseOnlyFilter = obj.noiseOnlyFilter(1:filterPts);
 
                     % Update filter plot
                     if isempty(obj.noiseOnlyLineHandle)
-                        obj.noiseOnlyLineHandle = line(obj.filterTimes, obj.noiseOnlyFilter,...
+                        obj.noiseOnlyLineHandle = line(filterTimes, obj.noiseOnlyFilter,...
                             'Parent', obj.axesHandle(1),'LineWidth',2,'Color','k',...
                             'DisplayName','Noise Only');
                     else
