@@ -38,6 +38,7 @@ classdef monitorSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLab
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);      
 
+            colors=edu.washington.riekelab.chris.utils.pmkmp(3,'IsoL');
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
@@ -45,7 +46,7 @@ classdef monitorSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLab
             % Add mean response figure grouped by stimulus type
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
-                'groupBy',{'stimulusTag'});
+                'groupBy',{'stimulusTag'},'sweepColor',colors);
 
             % Add intensity trace online analysis
             obj.showFigure('edu.washington.riekelab.chris.figures.IntensityTraceFigure',...
@@ -68,7 +69,6 @@ classdef monitorSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLab
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
             device = obj.rig.getDevice(obj.amp);
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
-
 
             % Automatically determine stimulus type based on epoch number
             stimTypes = {'sinusoidOnly', 'noiseOnly', 'sinusoidPlusNoise'};
@@ -130,8 +130,6 @@ classdef monitorSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLab
                     obj.intensityOverFrame = obj.sinusoidOverFrame + obj.noiseOverFrame;
             end
     
-
-
             % Clip values to valid range [0,1]
             obj.intensityOverFrame(obj.intensityOverFrame < 0) = 0;
             obj.intensityOverFrame(obj.intensityOverFrame > 1) = 1;

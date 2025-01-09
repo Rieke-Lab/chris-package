@@ -47,7 +47,6 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
         updateRate
         filterPts
         filterTimes
-
         epochCount
     end
 
@@ -99,20 +98,11 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
             filterLen = 800; % msec
             obj.filterPts = (filterLen/1000)*obj.updateRate;
             obj.filterTimes = linspace(0, filterLen, obj.filterPts);
-
+            
             obj.createUi();
         end
 
         function createUi(obj)
-            import appbox.*;
-            iconDir = [fileparts(fileparts(mfilename('fullpath'))), '\+utils\+icons\'];
-            toolbar = findall(obj.figureHandle, 'Type', 'uitoolbar');
-            plotLNButton = uipushtool( ...
-                'Parent', toolbar, ...
-                'TooltipString', 'Plot nonlinearity', ...
-                'Separator', 'on', ...
-                'ClickedCallback', @obj.onSelectedFitLN);
-            setIconImage(plotLNButton, [iconDir, 'exp.png']);
 
             obj.axesHandle(1) = subplot(2,1,1,...
                 'Parent',obj.figureHandle,...
@@ -149,14 +139,13 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
             sampleRate = response.sampleRate.quantityInBaseUnits;
             prePts = sampleRate*obj.preTime/1000;
 
-
             if strcmp(obj.recordingType,'extracellular') %spike recording
                 newResponse = zeros(size(epochResponseTrace));
                 %count spikes
                 S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace);
                 newResponse(S.sp) = 1;
-            else %intracellular - Vclamp
-                epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:prePts)); %baseline
+            else 
+                epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:10)); %baseline
                 if strcmp(obj.recordingType,'exc') %measuring exc
                     polarity = -1;
                 elseif strcmp(obj.recordingType,'inh') %measuring inh
@@ -311,6 +300,7 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
                             'DisplayName','Noise Only');
                     else
                         set(obj.noiseOnlyLineHandle, 'YData', obj.noiseOnlyFilter);
+    
                     end
 
                     % Calculate noise-only nonlinearity
@@ -334,6 +324,9 @@ classdef PhaseLinearFilterFigure < symphonyui.core.FigureHandler
                     else
                         set(obj.noiseOnlyLnDataHandle, 'XData', obj.noiseOnlyBinCenters, 'YData', obj.noiseOnlyBinResponses);
                     end
+                    
+                    legend(obj.axesHandle(1), 'show');
+                    legend(obj.axesHandle(2), 'show');
                 end
 
             end
