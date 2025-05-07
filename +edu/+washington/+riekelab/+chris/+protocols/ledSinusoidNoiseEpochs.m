@@ -18,9 +18,6 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
         interpulseInterval = 0          % Duration between stimuli (s)
     end
     
-    properties (Dependent, SetAccess = private)
-        amp2                            % Secondary amplifier
-    end
     
     properties (Hidden)
         ledType
@@ -39,9 +36,6 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
         
         function d = getPropertyDescriptor(obj, name)
             d = getPropertyDescriptor@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, name);
-            if strncmp(name, 'amp2', 4) && numel(obj.rig.getDeviceNames('Amp')) < 2
-                d.isHidden = true;
-            end
         end
         
         function p = getPreview(obj, panel)
@@ -65,21 +59,19 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
             
             colors = [0.8 0 0; 0 0.8 0; 0 0 0.8]; % Red, Green, Blue for different stimulus types
 
-
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure', obj.rig.getDevice(obj.amp), ...
                 'groupBy', {'stimulusTag'}, 'sweepColor', colors);
-  
-
+       
+            
             if ~strcmp(obj.onlineAnalysis, 'none')
-                obj.showFigure('edu.washington.riekelab.figures.LedPhaseLinearFilterFigure', ...
+                obj.showFigure('edu.washington.riekelab.chris.figures.LedPhaseLinearFilterFigure', ...
                     obj.rig.getDevice(obj.amp), obj.rig.getDevice(obj.led), ...
                     'recordingType', obj.onlineAnalysis, 'preTime', obj.preTime, ...
                     'stimTime', obj.stimTime, 'sampleRate', obj.sampleRate, ...
                     'figureTitle', 'LED Phase-separated Noise Analysis');
             end
-
-            
+          
             % Set LED background
             device = obj.rig.getDevice(obj.led);
             device.background = symphonyui.core.Measurement(obj.meanIntensity, device.background.displayUnits);
@@ -90,7 +82,7 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
             device = obj.rig.getDevice(obj.led);
             
             % Use the SinusoidPlusNoiseGenerator for all stimulus types
-            gen = edu.washington.riekelab.stimuli.SinusoidPlusNoiseGenerator();
+            gen = edu.washington.riekelab.chris.stimuli.SinusoidPlusNoiseGenerator();
             gen.preTime = obj.preTime;
             gen.stimTime = obj.stimTime;
             gen.tailTime = obj.tailTime;
@@ -122,8 +114,7 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
             else
                 gen.upperLimit = 10.239;
                 gen.lowerLimit = -10.24;
-            end
-            
+            end 
             stim = gen.generate();
         end
         
@@ -133,10 +124,10 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
             % Determine stimulus type based on epoch number
             % First three epochs are sinusoid only
             % Then alternating between sinusoid+noise and noise only
-            if obj.numEpochsCompleted < 3
+            if obj.numEpochsCompleted < 2
                 currentStimType = 'sinusoidOnly';
             else
-                remainingEpochs = mod(obj.numEpochsCompleted - 3, 2);
+                remainingEpochs = mod(obj.numEpochsCompleted - 2, 2);
                 if remainingEpochs == 0
                     currentStimType = 'sinusoidPlusNoise';
                 else
@@ -144,6 +135,9 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
                 end
             end
             obj.stimulusTag = currentStimType;
+            % Print epoch count and stimulus type
+            fprintf('Epoch %d out of %d, Stimulus Type: %s\n', ...
+                obj.numEpochsCompleted, obj.numberOfAverages, currentStimType);
             
             % Set seed for noise
             if ~obj.useRandomSeed
@@ -154,16 +148,14 @@ classdef ledSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLabProt
             
             % Create stimulus
             stim = obj.createStimulus(seed, currentStimType);
-            
-
-            sinusoidValues = stim.parameters.sinusoidValues;
-            noiseValues = stim.parameters.noiseValues;
-
+           
+%             sinusoidValues = stim.parameters('sinusoidValues');
+%             noiseValues = stim.parameters('noiseValues');
             % Add stimulus and metadata to epoch
             epoch.addParameter('noiseSeed', seed);
             epoch.addParameter('stimulusTag', currentStimType);
-            epoch.addParameter('sinusoidValues', sinusoidValues);
-            epoch.addParameter('noiseValues', noiseValues);
+%             epoch.addParameter('sinusoidValues', sinusoidValues);
+%             epoch.addParameter('noiseValues', noiseValues);
             
             epoch.addStimulus(obj.rig.getDevice(obj.led), stim);
             epoch.addResponse(obj.rig.getDevice(obj.amp));

@@ -285,7 +285,7 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
             end
 
             % Only compute filters if we have enough data
-            if obj.epochCount > 3
+            if obj.epochCount > 1
                 freqCutoffFraction = 0.5 * obj.sampleRate; % Half the sample rate as cutoff
 
                 % Initialize plot handles if needed
@@ -297,10 +297,10 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
                 % Compute filters if we have data for both phases
                 if ~isempty(obj.allRisingStimuli) && ~isempty(obj.allFallingStimuli)
                     % Use the provided function for filter calculation
-                    obj.risingFilter = obj.getLinearFilterOnline(...
+                    obj.risingFilter = edu.washington.riekelab.util.getLinearFilterOnline(...
                         obj.allRisingStimuli, obj.allRisingResponses, obj.sampleRate, freqCutoffFraction);
 
-                    obj.fallingFilter = obj.getLinearFilterOnline(...
+                    obj.fallingFilter = edu.washington.riekelab.util.getLinearFilterOnline(...
                         obj.allFallingStimuli, obj.allFallingResponses, obj.sampleRate, freqCutoffFraction);
 
                     % Ensure filters are the correct length

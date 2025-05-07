@@ -111,8 +111,8 @@ classdef SinusoidPlusNoiseGenerator < symphonyui.core.StimulusGenerator
             parameters = obj.dictionaryFromMap(obj.propertyMap);
             
             % Add component values to parameters for analysis
-            parameters.Add('sinusoidValues', obj.sinusoidValues);
-            parameters.Add('noiseValues', obj.noiseValues);
+%             parameters.Add('sinusoidValues', obj.sinusoidValues);
+%             parameters.Add('noiseValues', obj.noiseValues);
             
             measurements = Measurement.FromArray(data, obj.units);
             rate = Measurement(obj.sampleRate, 'Hz');

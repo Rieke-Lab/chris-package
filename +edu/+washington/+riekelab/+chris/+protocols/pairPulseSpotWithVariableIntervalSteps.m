@@ -5,16 +5,16 @@ classdef pairPulseSpotWithVariableIntervalSteps < edu.washington.riekelab.protoc
     properties
         amp                             % Output amplifier
         preTime = 600                   % Spot leading duration (ms)
-        stimTime = 3000                 % Spot duration (ms)
+        stimTime = 6000                 % Spot duration (ms)
         tailTime = 400                  % Spot trailing duration (ms)
-        spotDiameter = 200             % Spot diameter size (um)
+        spotDiameter = 300             % Spot diameter size (um)
         apertureDiameter=0
         flashContrast = -0.9  % the opposing step with be just -flashContrast for simplicity
-        stepContrast=0.9
+        stepContrast=0
         flashDuration=300      % ms
-        meanIntensity = 0.1     % Background light intensity (0-1)
-        pulseIntervals=[0.2 0.5 2]
-        psth=True 
+        meanIntensity = 0.2     % Background light intensity (0-1)
+        pulseIntervals=[200 500 2000 3500 5000]
+        psth=false
         numberOfAverages = uint16(3)    % Number of repeats 
         interpulseInterval = 0          % Duration between spots (s)
     end
@@ -28,15 +28,14 @@ classdef pairPulseSpotWithVariableIntervalSteps < edu.washington.riekelab.protoc
     methods
         
         function didSetRig(obj)
-            didSetRig@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-            
+            didSetRig@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);          
             [obj.amp, obj.ampType] = obj.createDeviceNamesProperty('Amp');
         end
         
         
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
-            colors = edu.washington.riekelab.turner.utils.pmkmp(numel(obj.pulseIntervals),'CubicYF');
+            colors = edu.washington.riekelab.chris.utils.pmkmp(numel(obj.pulseIntervals),'CubicYF');
             obj.showFigure('edu.washington.riekelab.figures.FrameTimingFigure', obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             if obj.psth
@@ -48,6 +47,7 @@ classdef pairPulseSpotWithVariableIntervalSteps < edu.washington.riekelab.protoc
             % randomize the intervals 
             tpIndex=repmat(1:numel(obj.pulseIntervals), 1, obj.numberOfAverages);
             obj.intervalIndex=tpIndex(randperm(numel(tpIndex)));
+  
         end
         
         function prepareEpoch(obj, epoch)
@@ -64,37 +64,33 @@ classdef pairPulseSpotWithVariableIntervalSteps < edu.washington.riekelab.protoc
         
         
         function p = createPresentation(obj)
-            try
-                device = obj.rig.getDevice('Stage');
-                canvasSize = device.getCanvasSize();
-                
-                spotDiameterPix = device.um2pix(obj.spotDiameter);
-                apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
-
-                p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3);
-                p.setBackgroundColor(obj.meanIntensity);
-                
-                flash = stage.builtin.stimuli.Ellipse();
-                flash.color = obj.meanIntensity;
-                flash.radiusX = spotDiameterPix/2;
-                flash.radiusY = spotDiameterPix/2;
-                flash.position = canvasSize/2;
-                p.addStimulus(flash);
-                flashController = stage.builtin.controllers.PropertyController(flash, 'color', ...
-                    @(state) getSpotColor(state.time));
-                p.addController(flashController);
-
-                if (obj.apertureDiameter > 0) %% Create aperture
-                    aperture = stage.builtin.stimuli.Rectangle();
-                    aperture.position = canvasSize/2;
-                    aperture.color = 0;
-                    aperture.size = [max(canvasSize) max(canvasSize)];
-                    mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/max(canvasSize), 1024); %circular aperture
-                    aperture.setMask(mask);
-                    p.addStimulus(aperture); %add aperture
-                end
-            catch ME
-                disp(getReport(ME));
+            device = obj.rig.getDevice('Stage');
+            canvasSize = device.getCanvasSize();
+            
+            spotDiameterPix = device.um2pix(obj.spotDiameter);
+            apertureDiameterPix = obj.rig.getDevice('Stage').um2pix(obj.apertureDiameter);
+            
+            p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3);
+            p.setBackgroundColor(obj.meanIntensity);
+            
+            flash = stage.builtin.stimuli.Ellipse();
+            flash.color = obj.meanIntensity;
+            flash.radiusX = spotDiameterPix/2;
+            flash.radiusY = spotDiameterPix/2;
+            flash.position = canvasSize/2;
+            p.addStimulus(flash);
+            flashController = stage.builtin.controllers.PropertyController(flash, 'color', ...
+                @(state) obj.getSpotColor(state.time));
+            p.addController(flashController);
+            
+            if (obj.apertureDiameter > 0) %% Create aperture
+                aperture = stage.builtin.stimuli.Rectangle();
+                aperture.position = canvasSize/2;
+                aperture.color = 0;
+                aperture.size = [max(canvasSize) max(canvasSize)];
+                mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/max(canvasSize), 1024); %circular aperture
+                aperture.setMask(mask);
+                p.addStimulus(aperture); %add aperture
             end
         end
         
