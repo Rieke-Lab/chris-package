@@ -1,4 +1,4 @@
-classdef EyeMovementTrajectory < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef EyeMovementTrajectoryMeanStep < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
     properties
         preTime = 200 % ms
