@@ -62,11 +62,12 @@ classdef SkewGratings < edu.washington.riekelab.protocols.RiekeLabStageProtocol
         end
         
         function prepareRun(obj)
+            colors=edu.washington.riekelab.turner.utls.pmkmp(20,'IsoL');
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             obj.showFigure('edu.washington.riekelab.turner.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
-                'groupBy',{'stimulusTag'});
+                'groupBy',{'stimulusTag'},'sweepColor',colors);
             obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             if ~strcmp(obj.onlineAnalysis,'none')
