@@ -1,278 +1,126 @@
-classdef SplitFieldFilterFigure < symphonyui.core.FigureHandler
+classdef SplitFieldRectangle < stage.core.Stimulus
+    % A split-field rectangle stimulus with individually controllable left, middle, and right sections.
+    % This version uses a single initialization but still allows dynamic updates to section positions.
     
-    properties (SetAccess = private)
-        ampDevice
-        frameMonitor
-        stageDevice
-        recordingType
-        preTime
-        stimTime
-        frameDwell
-        leftMeanIntensity
-        figureTitle
+    properties
+        position = [0, 0]           % Center position on the canvas [x, y] (pixels)
+        size = [100, 100]           % Overall size [width, height] (pixels)
+        gapSize = 10                % Width of the middle section/gap (pixels)
+        orientation = 0             % Orientation (degrees)
+        leftColor = [1, 1, 1]       % Left section color as single intensity value or [R, G, B] (0 to 1)
+        middleColor = [0, 0, 0]     % Middle section color as single intensity value or [R, G, B] (0 to 1)
+        rightColor = [1, 1, 1]      % Right section color as single intensity value or [R, G, B] (0 to 1)
+        leftOpacity = 1             % Left section opacity (0 to 1)
+        middleOpacity = 1           % Middle section opacity (0 to 1)
+        rightOpacity = 1            % Right section opacity (0 to 1)
     end
-    
+
     properties (Access = private)
-        axesHandle
-        lineHandles
-        lnDataHandles
-        leftMeanValues
-        rightFieldStimuli
-        allResponses
-        newFilters
-        epochCount
-        uniqueMeans
-        colorMap
+        mask                        % Stimulus mask
+        vbo                         % Vertex buffer object
+        vao                         % Vertex array object
     end
-    
+
     methods
+        function init(obj, canvas)
+            init@stage.core.Stimulus(obj, canvas);
+
+            if ~isempty(obj.mask)
+                obj.mask.init(canvas);
+            end
+
+            % Initialize with placeholder data - will be updated in first draw
+            % 12 vertices for 3 quads (left, middle, right sections)
+            vertexData = zeros(1, 12 * 6); % Each vertex has 6 components (pos + tex)
+            obj.vbo = stage.core.gl.VertexBufferObject(canvas, GL.ARRAY_BUFFER, single(vertexData), GL.DYNAMIC_DRAW);
+
+            obj.vao = stage.core.gl.VertexArrayObject(canvas);
+            obj.vao.setAttribute(obj.vbo, 0, 4, GL.FLOAT, GL.FALSE, 6*4, 0);
+            obj.vao.setAttribute(obj.vbo, 1, 2, GL.FLOAT, GL.FALSE, 6*4, 4*4);
+            
+            % Initial update of vertex positions
+            obj.updateSectionPositions();
+        end
         
-        function obj = SplitFieldFilterFigure(ampDevice, frameMonitor, stageDevice, varargin)
-            obj.ampDevice = ampDevice;
-            obj.frameMonitor = frameMonitor;
-            obj.stageDevice = stageDevice;
-            ip = inputParser();
-            ip.addParameter('recordingType', [], @(x)ischar(x));
-            ip.addParameter('preTime', [], @(x)isvector(x));
-            ip.addParameter('stimTime', [], @(x)isvector(x));
-            ip.addParameter('frameDwell', [], @(x)isvector(x));
-            ip.addParameter('leftMeanIntensity', [0.08 0.65], @(x)isvector(x));
-            ip.addParameter('figureTitle','Split Field Linear-Nonlinear analysis', @(x)ischar(x));
-            ip.parse(varargin{:});
-            
-            obj.recordingType = ip.Results.recordingType;
-            obj.preTime = ip.Results.preTime;
-            obj.stimTime = ip.Results.stimTime;
-            obj.frameDwell = ip.Results.frameDwell;
-            obj.leftMeanIntensity = ip.Results.leftMeanIntensity;
-            obj.figureTitle = ip.Results.figureTitle;
-
-            % Initialize data structures for each unique left mean intensity
-            obj.uniqueMeans = unique(obj.leftMeanIntensity);
-            numMeans = length(obj.uniqueMeans);
-            
-            % Create a colormap for different mean intensities
-            obj.colorMap = hsv(numMeans);
-            
-            % Initialize data structures
-            obj.rightFieldStimuli = cell(numMeans, 1);
-            obj.allResponses = cell(numMeans, 1);
-            obj.newFilters = cell(numMeans, 1);
-            obj.lineHandles = cell(numMeans, 1);
-            obj.lnDataHandles = cell(numMeans, 1);
-            
-            obj.leftMeanValues = [];
-            obj.epochCount = 0;
-            obj.createUi();
+        function setMask(obj, mask)
+            % Assigns a mask to the stimulus.
+            obj.mask = mask;
         end
-
-        function createUi(obj)
-            import appbox.*;
-            iconDir = [fileparts(fileparts(mfilename('fullpath'))), '\+utils\+icons\'];
-            toolbar = findall(obj.figureHandle, 'Type', 'uitoolbar');
-            plotLNButton = uipushtool( ...
-                'Parent', toolbar, ...
-                'TooltipString', 'Plot nonlinearity', ...
-                'Separator', 'on', ...
-                'ClickedCallback', @obj.onSelectedFitLN);
-            setIconImage(plotLNButton, [iconDir, 'exp.png']);
-
-            obj.axesHandle(1) = subplot(2,1,1,...
-                'Parent',obj.figureHandle,...
-                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'),...
-                'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
-                'XTickMode', 'auto');
-            xlabel(obj.axesHandle(1), 'Time (ms)');
-            ylabel(obj.axesHandle(1), 'Amp.');
-            title(obj.axesHandle(1),'Linear filters by left field intensity');
+        
+        function updateSectionPositions(obj)
+            % Calculate the position of each section based on the overall size and gap size
+            totalWidth = obj.size(1);
+            halfGap = obj.gapSize / 2;
             
-            obj.axesHandle(2) = subplot(2,1,2,...
-                'Parent',obj.figureHandle,...
-                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'),...
-                'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
-                'XTickMode', 'auto');
-            xlabel(obj.axesHandle(2), 'Linear prediction');
-            ylabel(obj.axesHandle(2), 'Measured');
-            title(obj.axesHandle(2),'Nonlinearities by left field intensity');
+            % Calculate normalized coordinates for the section boundaries
+            leftEnd = -0.5 + (totalWidth/2 - halfGap) / totalWidth;
+            rightStart = 0.5 - (totalWidth/2 - halfGap) / totalWidth;
             
-            % Add a legend
-            legend_entries = cell(length(obj.uniqueMeans), 1);
-            for i = 1:length(obj.uniqueMeans)
-                legend_entries{i} = ['Left mean = ', num2str(obj.uniqueMeans(i))];
-            end
-            legend(obj.axesHandle(1), legend_entries, 'Location', 'northeast');
-            
-            obj.figureHandle.Name = obj.figureTitle;
-        end
-
-        function handleEpoch(obj, epoch)
-            obj.epochCount = obj.epochCount + 1;
-            
-            % Get current left mean intensity for this epoch
-            currentLeftMean = epoch.parameters('currentLeftMean');
-            
-            % Find which group this left mean belongs to
-            meanIndex = find(obj.uniqueMeans == currentLeftMean);
-            
-            % Load amp data
-            response = epoch.getResponse(obj.ampDevice);
-            epochResponseTrace = response.getData();
-            sampleRate = response.sampleRate.quantityInBaseUnits;
-            prePts = sampleRate*obj.preTime/1000;
-            
-            % Process response based on recording type
-            if strcmp(obj.recordingType,'extracellular') % spike recording
-                newResponse = zeros(size(epochResponseTrace));
-                % Count spikes
-                S = edu.washington.riekelab.weber.utils.spikeDetectorOnline(epochResponseTrace);
-                newResponse(S.sp) = 1;
-            else % intracellular - Vclamp
-                epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:prePts)); % baseline
-                if strcmp(obj.recordingType,'exc') % measuring exc
-                    polarity = -1;
-                elseif strcmp(obj.recordingType,'inh') % measuring inh
-                    polarity = 1;
-                end
-                newResponse = polarity * epochResponseTrace;
-            end
-            
-            % Load frame monitor data
-            if isa(obj.stageDevice,'edu.washington.riekelab.devices.LightCrafterDevice')
-                lightCrafterFlag = 1;
-            else % OLED stage device
-                lightCrafterFlag = 0;
-            end
-            frameRate = obj.stageDevice.getMonitorRefreshRate();
-            FMresponse = epoch.getResponse(obj.frameMonitor);
-            FMdata = FMresponse.getData();
-            frameTimes = edu.washington.riekelab.weber.utils.getFrameTiming(FMdata, lightCrafterFlag);
-            preFrames = frameRate*(obj.preTime/1000);
-            
-            % Skip pre-frames
-            if preFrames > 0
-                firstStimFrameFlip = frameTimes(preFrames+1);
-                newResponse = newResponse(firstStimFrameFlip:end);
-            end
-            
-            % Get right field noise stimulus directly from epoch parameters
-            rightFieldIntensityOverFrame = epoch.parameters('rightFieldIntensityOverFrame');
-            
-            % Downsample response to match stimulus update rate
-            stimFrames = length(rightFieldIntensityOverFrame);
-            response = zeros(1, stimFrames);
-            
-            % Get response at each noise update frame
-            chunkLen = obj.frameDwell*mean(diff(frameTimes));
-            for ii = 1:stimFrames
-                if ii*chunkLen <= length(newResponse)
-                    response(ii) = mean(newResponse(round((ii-1)*chunkLen + 1) : round(ii*chunkLen)));
-                end
-            end
-            
-            % Add to stored data for this mean intensity
-            if isempty(obj.rightFieldStimuli{meanIndex})
-                obj.rightFieldStimuli{meanIndex} = rightFieldIntensityOverFrame;
-                obj.allResponses{meanIndex} = response;
-            else
-                obj.rightFieldStimuli{meanIndex} = cat(1, obj.rightFieldStimuli{meanIndex}, rightFieldIntensityOverFrame);
-                obj.allResponses{meanIndex} = cat(1, obj.allResponses{meanIndex}, response);
-            end
-            
-            % Calculate and update linear filter for this mean intensity
-            updateRate = (frameRate/obj.frameDwell); % hz
-            filterLen = 800; % msec, length of linear filter to compute
-            freqCutoffFraction = 1; % fraction of noise update rate at which to cut off filter spectrum
-            
-            obj.newFilters{meanIndex} = edu.washington.riekelab.chris.utils.getLinearFilterOnline(...
-                obj.rightFieldStimuli{meanIndex}, obj.allResponses{meanIndex}, ...
-                updateRate, freqCutoffFraction*updateRate);
-            
-            filterPts = (filterLen/1000)*updateRate;
-            filterTimes = linspace(0, filterLen, filterPts); % msec
-            
-            % Ensure the filter isn't longer than what we can display
-            if length(obj.newFilters{meanIndex}) >= filterPts
-                obj.newFilters{meanIndex} = obj.newFilters{meanIndex}(1:filterPts);
-            else
-                % Pad with zeros if needed
-                padSize = filterPts - length(obj.newFilters{meanIndex});
-                obj.newFilters{meanIndex} = [obj.newFilters{meanIndex}; zeros(padSize, 1)];
-            end
-            
-            % Plot the filter
-            if isempty(obj.lineHandles{meanIndex})
-                % Create new line
-                obj.lineHandles{meanIndex} = line(filterTimes, obj.newFilters{meanIndex}, ...
-                    'Parent', obj.axesHandle(1), 'LineWidth', 2, 'Color', obj.colorMap(meanIndex,:));
+            % Combine all vertex data into one array
+            vertexData = [
+                % Left section (4 vertices with pos + tex)
+                -1      1  0  1,  0  1, ...
+                -1     -1  0  1,  0  0, ...
+                leftEnd  1  0  1,  1  1, ...
+                leftEnd -1  0  1,  1  0, ...
                 
-                % Add zero line if it's the first one
-                if meanIndex == 1
-                    line([filterTimes(1) filterTimes(end)], [0 0], ...
-                        'Parent', obj.axesHandle(1), 'Color', 'k', ...
-                        'Marker', 'none', 'LineStyle', '--');
-                end
-            else
-                % Update existing line
-                set(obj.lineHandles{meanIndex}, 'YData', obj.newFilters{meanIndex});
-            end
+                % Middle section (4 vertices with pos + tex)
+                leftEnd     1  0  1,  0  1, ...
+                leftEnd    -1  0  1,  0  0, ...
+                rightStart  1  0  1,  1  1, ...
+                rightStart -1  0  1,  1  0, ...
+                
+                % Right section (4 vertices with pos + tex)
+                rightStart  1  0  1,  0  1, ...
+                rightStart -1  0  1,  0  0, ...
+                1           1  0  1,  1  1, ...
+                1          -1  0  1,  1  0  ...
+            ];
             
-            % Update nonlinearity plot after every epoch
-            obj.onSelectedFitLN();
+            % Update the vertex buffer object with all data at once
+            obj.vbo.uploadData(single(vertexData));
         end
     end
-    
-    methods (Access = private)
-        
-        function onSelectedFitLN(obj, ~, ~)
-            % Calculate and plot nonlinearity for each mean intensity
-            for meanIndex = 1:length(obj.uniqueMeans)
-                % Skip if no data for this mean
-                if isempty(obj.rightFieldStimuli{meanIndex}) || isempty(obj.allResponses{meanIndex})
-                    continue;
-                end
-                
-                % Reshape data
-                measuredResponse = reshape(obj.allResponses{meanIndex}', 1, numel(obj.allResponses{meanIndex}));
-                stimulusArray = reshape(obj.rightFieldStimuli{meanIndex}', 1, numel(obj.rightFieldStimuli{meanIndex}));
-                
-                % Calculate linear prediction
-                linearPrediction = conv(stimulusArray, obj.newFilters{meanIndex});
-                linearPrediction = linearPrediction(1:length(stimulusArray));
-                
-                % Bin responses by linear prediction
-                [~, edges, bin] = histcounts(linearPrediction, 'BinMethod', 'auto');
-                binCtrs = edges(1:end-1) + diff(edges);
-                
-                binResp = zeros(size(binCtrs));
-                for bb = 1:length(binCtrs)
-                    binResp(bb) = mean(measuredResponse(bin == bb)); 
-                end
-                
-                % Plot or update nonlinearity
-                if isempty(obj.lnDataHandles{meanIndex})
-                    % Create new plot
-                    obj.lnDataHandles{meanIndex} = line(binCtrs, binResp, ...
-                        'Parent', obj.axesHandle(2), 'LineStyle', '-', 'Marker', 'o', ...
-                        'MarkerSize', 4, 'Color', obj.colorMap(meanIndex,:));
-                    
-                    % Add zero lines if it's the first one
-                    if meanIndex == 1
-                        limDown = min([linearPrediction measuredResponse]);
-                        limUp = max([linearPrediction measuredResponse]);
-                        
-                        % Add horizontal and vertical zero lines
-                        line([limDown limUp], [0 0], ...
-                            'Parent', obj.axesHandle(2), 'Color', 'k', ...
-                            'Marker', 'none', 'LineStyle', '--');
-                        line([0 0], [limDown limUp], ...
-                            'Parent', obj.axesHandle(2), 'Color', 'k', ...
-                            'Marker', 'none', 'LineStyle', '--');
-                    end
-                else
-                    % Update existing plot
-                    set(obj.lnDataHandles{meanIndex}, 'YData', binResp, 'XData', binCtrs);
-                end
+
+    methods (Access = protected)
+        function performDraw(obj)
+            % Update section positions based on current gap size
+            obj.updateSectionPositions();
+            
+            modelView = obj.canvas.modelView;
+            modelView.push();
+            modelView.translate(obj.position(1), obj.position(2), 0);
+            modelView.rotate(obj.orientation, 0, 0, 1);
+            modelView.scale(obj.size(1) / 2, obj.size(2) / 2, 1);
+
+            % Draw left section
+            leftC = obj.leftColor;
+            if length(leftC) == 1
+                leftC = [leftC, leftC, leftC, obj.leftOpacity];
+            elseif length(leftC) == 3
+                leftC = [leftC, obj.leftOpacity];
             end
+            obj.canvas.drawArray(obj.vao, GL.TRIANGLE_STRIP, 0, 4, leftC, obj.mask);
+
+            % Draw middle section
+            middleC = obj.middleColor;
+            if length(middleC) == 1
+                middleC = [middleC, middleC, middleC, obj.middleOpacity];
+            elseif length(middleC) == 3
+                middleC = [middleC, obj.middleOpacity];
+            end
+            obj.canvas.drawArray(obj.vao, GL.TRIANGLE_STRIP, 4, 4, middleC, obj.mask);
+
+            % Draw right section
+            rightC = obj.rightColor;
+            if length(rightC) == 1
+                rightC = [rightC, rightC, rightC, obj.rightOpacity];
+            elseif length(rightC) == 3
+                rightC = [rightC, obj.rightOpacity];
+            end
+            obj.canvas.drawArray(obj.vao, GL.TRIANGLE_STRIP, 8, 4, rightC, obj.mask);
+
+            modelView.pop();
         end
     end
 end
