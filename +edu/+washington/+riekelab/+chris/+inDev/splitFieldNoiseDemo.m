@@ -31,7 +31,7 @@ end
 
 function runEpoch(canvas, epochNum, params)
     % Create the split field rectangle stimulus
-    rect = stage.builtin.stimuli.SplitFieldRectangle();
+    rect = edu.washington.riekelab.chris.inDev.SplitFieldRectangle();
     rect.position = canvas.size/2;                  % Center on screen
     rect.size = [400, 200];                         % Overall rectangle size (width, height)
     rect.gapSize = params.gapSize;                  % Set fixed gap size in pixels

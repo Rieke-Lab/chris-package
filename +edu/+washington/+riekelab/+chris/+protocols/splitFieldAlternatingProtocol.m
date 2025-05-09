@@ -1,4 +1,4 @@
-classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef splitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     
     properties
         preTime = 0 % ms
@@ -64,7 +64,7 @@ classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.Rieke
                 epochMean = obj.leftMeanIntensity(2 - mod(obj.numEpochsPrepared, 2));
             end
             obj.currentLeftMean = epochMean;
-            
+
             % Generate noise for right field
             % assuming frame rate at 60 Hz 
             updateRate = 60 / obj.frameDwell;
@@ -94,9 +94,9 @@ classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.Rieke
             gapSizePix = obj.rig.getDevice('Stage').um2pix(obj.gapSize);
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3); %create presentation of specified duration
             p.setBackgroundColor(min(obj.leftMeanIntensity)); % Set background intensity
-            
+       
             % Create split field rectangle stimulus
-            splitField = stage.builtin.stimuli.SplitFieldRectangle();
+            splitField = edu.washington.riekelab.chris.stimuli.SplitFieldRectangle();
             splitField.position = canvasSize/2;                  % Center on screen
             
             % Set size to cover the whole canvas or aperture
@@ -115,58 +115,51 @@ classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.Rieke
             splitField.leftColor = [obj.currentLeftMean, obj.currentLeftMean, obj.currentLeftMean];
             splitField.middleColor = [gapIntensity, gapIntensity, gapIntensity];
             splitField.rightColor = [obj.rightFieldMean, obj.rightFieldMean, obj.rightFieldMean];
-            
-            p.addStimulus(splitField);
-            
-            % Create controller for left field - constant value for the epoch
-            leftIntensityController = stage.builtin.controllers.PropertyController(splitField, 'leftColor', ...
-                @(state)getLeftFieldIntensity(obj));
-            p.addController(leftIntensityController);
-            
+
+
+            p.addStimulus(splitField); 
+
+
+           
             % Create controller for right field - follows noise pattern based on frame number
-            rightIntensityController = stage.builtin.controllers.PropertyController(splitField, 'rightColor', ...
-                @(state)getRightFieldIntensity(obj, state.frame - round(60 * (obj.preTime/1e3)), obj.rightFieldIntensityOverFrame));
-            p.addController(rightIntensityController);
+%             rightIntensityController = stage.builtin.controllers.PropertyController(splitField, 'rightColor', ...
+%                 @(state)getRightFieldIntensity(obj, state.frame - round(60 * (obj.preTime/1e3)), obj.rightFieldIntensityOverFrame));
+%             p.addController(rightIntensityController);
             
             % Controller for stimulus visibility
-            stimVisible = stage.builtin.controllers.PropertyController(splitField, 'visible', ...
-                @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
-            p.addController(stimVisible);
-            
+%             stimVisible = stage.builtin.controllers.PropertyController(splitField, 'visible', ...
+%                 @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
+%             p.addController(stimVisible);
+      
             % Create aperture if specified
-            if (obj.apertureDiameter > 0)
-                aperture = stage.builtin.stimuli.Rectangle();
-                aperture.position = canvasSize/2;
-                aperture.color = 0;
-                aperture.size = [max(canvasSize) max(canvasSize)];
-                mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/max(canvasSize), 1024); %circular aperture
-                aperture.setMask(mask);
-                p.addStimulus(aperture); %add aperture
-            end
+%             if (obj.apertureDiameter > 0)
+%                 aperture = stage.builtin.stimuli.Rectangle();
+%                 aperture.position = canvasSize/2;
+%                 aperture.color = 0;
+%                 aperture.size = [max(canvasSize) max(canvasSize)];
+%                 mask = stage.core.Mask.createCircularAperture(apertureDiameterPix/max(canvasSize), 1024); %circular aperture
+%                 aperture.setMask(mask);
+%                 p.addStimulus(aperture); %add aperture
+%             end
             
-            function c = getLeftFieldIntensity(obj)
-                % Simply use the currentLeftMean that was selected for this epoch
-                intensity = obj.currentLeftMean;
-                c = [intensity, intensity, intensity];
-            end
+ 
 
-            function c = getRightFieldIntensity(obj, frame, intensityArray)
-                persistent intensity;
-                
-                if frame < 0 % pre frames
-                    intensity = obj.rightFieldMean;
-                else % in stim frames
-                    if mod(frame, obj.frameDwell) == 0 % noise update
-                        frameIndex = (frame - mod(frame, obj.frameDwell)) / obj.frameDwell + 1;
-                        % Ensure valid index
-                        if frameIndex <= length(intensityArray)
-                            intensity = intensityArray(frameIndex);
-                        end
-                    end
-                end
-                
-                c = [intensity, intensity, intensity];
-            end
+%             function c = getRightFieldIntensity(obj, frame, intensityArray)
+%                 persistent intensity;
+%                 if frame < 0 % pre frames
+%                     intensity = obj.rightFieldMean;
+%                 else % in stim frames
+%                     if mod(frame, obj.frameDwell) == 0 % noise update
+%                         frameIndex = (frame - mod(frame, obj.frameDwell)) / obj.frameDwell + 1;
+%                         % Ensure valid index
+%                         if frameIndex <= length(intensityArray)
+%                             intensity = intensityArray(frameIndex);
+%                         end
+%                     end
+%                 end
+%                 
+%                 c = [intensity, intensity, intensity];
+%             end
         end
 
         function tf = shouldContinuePreparingEpochs(obj)
