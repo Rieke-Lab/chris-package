@@ -1,72 +1,113 @@
-function splitFieldDemo()
+function splitFieldNoiseDemo()
     import stage.core.*;
     
     % Open a window in windowed-mode and create a canvas. 'disableDwm' = false for demo only!
     window = Window([640, 480], false);
     canvas = Canvas(window, 'disableDwm', false);
     
-    % Create the split field rectangle stimulus
-    rect = SplitFieldRectangle();
-    rect.position = canvas.size/2;       % Center on screen
-    rect.size = [400, 200];              % Overall rectangle size (width, height)
-    rect.gapSize = 20;                   % Initial gap size
-    rect.leftColor = [0.8, 0, 0];        % Initial left section color (red)
-    rect.middleColor = [0.2, 0.2, 0.2];  % Initial middle section color (dark gray)
-    rect.rightColor = [0, 0, 0.8];       % Initial right section color (blue)
+    % Experiment parameters
+    params = struct();
+    params.meanIntensity = [0.3, 0.7];   % Two mean intensity values for the left field
+    params.noiseStdv = 0.2;              % Standard deviation of noise for right field
+    params.stimTime = 5000;              % Stimulus duration in ms
+    params.frameDwell = 1;               % Number of monitor frames per update
+    params.gapSize = 30;                 % Size of the middle gap in pixels
+    params.middleIntensity = 0.2;        % Fixed intensity for the middle gap
+    params.epochsToRun = 4;              % Number of epochs to run
     
-    % Duration of presentation in seconds
-    duration = 6;
-    
-    % Create controllers to animate the split field rectangle
-    
-    % Controller for gap size (middle section) - oscillates between 10 and 50 pixels
-    gapSizeController = stage.builtin.controllers.PropertyController(rect, 'gapSize', ...
-        @(state)oscillateValue(state.time, 10, 50, duration));
-    
-    % Controllers for left section intensity - gradually increases from 0.2 to 1.0
-    leftIntensityController = stage.builtin.controllers.PropertyController(rect, 'leftColor', ...
-        @(state)[linearValue(state.time, 0.2, 1.0, duration), 0, 0]);
-    
-    % Controllers for right section intensity - gradually decreases from 1.0 to 0.2
-    rightIntensityController = stage.builtin.controllers.PropertyController(rect, 'rightColor', ...
-        @(state)[0, 0, linearValue(state.time, 1.0, 0.2, duration)]);
-    
-    % Controller for middle section opacity - oscillates between 0.3 and 1.0
-    middleOpacityController = stage.builtin.controllers.PropertyController(rect, 'middleOpacity', ...
-        @(state)oscillateValue(state.time, 0.3, 1.0, duration/2));
-    
-    % Create a presentation and add the stimulus and controllers
-    presentation = Presentation(duration);
-    presentation.addStimulus(rect);
-    presentation.addController(gapSizeController);
-    presentation.addController(leftIntensityController);
-    presentation.addController(rightIntensityController);
-    presentation.addController(middleOpacityController);
-    
-    % Play the presentation on the canvas!
-    presentation.play(canvas);
+    % Run the specified number of epochs
+    for epochNum = 1:params.epochsToRun
+        fprintf('Running epoch %d of %d\n', epochNum, params.epochsToRun);
+        runEpoch(canvas, epochNum, params);
+        
+        % Wait a bit between epochs
+        if epochNum < params.epochsToRun
+            pause(1);
+        end
+    end
     
     % Window automatically closes when the window object is deleted.
 end
 
-% Helper function to create a linearly changing value over time
-function value = linearValue(time, startValue, endValue, duration)
-    % Ensure time doesn't exceed duration
-    time = min(time, duration);
+function runEpoch(canvas, epochNum, params)
+    % Create the split field rectangle stimulus
+    rect = SplitFieldRectangle();
+    rect.position = canvas.size/2;                  % Center on screen
+    rect.size = [400, 200];                         % Overall rectangle size (width, height)
+    rect.gapSize = params.gapSize;                  % Set fixed gap size
+    rect.middleColor = [params.middleIntensity, params.middleIntensity, params.middleIntensity]; % Set fixed middle intensity
     
-    % Calculate how far we are through the animation (0 to 1)
-    progress = time / duration;
+    % Set up the random noise for this epoch
+    noiseSeed = RandStream.shuffleSeed;
+    fprintf('%s %d\n', 'current epoch::', epochNum);
     
-    % Calculate current value
-    value = startValue + (endValue - startValue) * progress;
+    % Determine mean intensity for this epoch
+    if numel(params.meanIntensity) > 2
+        epochMean = params.meanIntensity(randi(numel(params.meanIntensity)));
+    else
+        epochMean = params.meanIntensity(2 - mod(epochNum, 2));
+    end
+    fprintf('Left field mean intensity: %f\n', epochMean);
+    
+    % Set initial left field color based on the epoch mean
+    rect.leftColor = [epochMean, epochMean, epochMean];
+    
+    % Generate right field noise pattern
+    % Assuming frame rate at 60 Hz
+    updateRate = 60 / params.frameDwell;
+    framePerPeriod = ceil(updateRate * params.stimTime / 1e3);  % note that the frame here is not the monitor frame rate
+    
+    % Generate noise intensity values
+    noiseStream = RandStream('mt19937ar', 'Seed', noiseSeed);
+    intensityOverFrame = epochMean + params.noiseStdv * epochMean * noiseStream.randn(1, framePerPeriod);
+    
+    % Clamp values between 0 and 1
+    intensityOverFrame(intensityOverFrame < 0) = 0;
+    intensityOverFrame(intensityOverFrame > 1) = 1;
+    
+    % Duration of presentation in seconds
+    duration = params.stimTime / 1000;
+    
+    % Create controller for left field intensity - simply alternate between the two mean values
+    leftIntensityController = stage.builtin.controllers.PropertyController(rect, 'leftColor', ...
+        @(state)getLeftIntensity(state.time, duration, params.meanIntensity));
+    
+    % Create controller for right field intensity - follow the precomputed noise pattern
+    rightIntensityController = stage.builtin.controllers.PropertyController(rect, 'rightColor', ...
+        @(state)getRightIntensity(state.time, duration, intensityOverFrame, framePerPeriod));
+    
+    % Create a presentation and add the stimulus and controllers
+    presentation = stage.core.Presentation(duration);
+    presentation.addStimulus(rect);
+    presentation.addController(leftIntensityController);
+    presentation.addController(rightIntensityController);
+    
+    % Play the presentation on the canvas!
+    presentation.play(canvas);
 end
 
-% Helper function to create an oscillating value over time
-function value = oscillateValue(time, minValue, maxValue, period)
-    % Calculate oscillation based on sine wave
-    % sin varies from -1 to 1, so we add 1 and divide by 2 to get 0 to 1
-    oscillation = (sin(2 * pi * time / period) + 1) / 2;
+% Function to determine left field intensity based on time
+function color = getLeftIntensity(time, duration, meanIntensities)
+    % Simply use the first mean for first half of epoch, second mean for second half
+    if time < duration/2
+        intensity = meanIntensities(1);
+    else
+        intensity = meanIntensities(2);
+    end
     
-    % Scale oscillation to the range we want
-    value = minValue + (maxValue - minValue) * oscillation;
+    % Return as RGB
+    color = [intensity, intensity, intensity];
+end
+
+% Function to determine right field intensity based on precomputed noise pattern
+function color = getRightIntensity(time, duration, intensityOverFrame, framePerPeriod)
+    % Calculate which frame we are in
+    progress = time / duration;
+    frameIndex = max(1, min(framePerPeriod, round(progress * framePerPeriod)));
+    
+    % Get the intensity for this frame
+    intensity = intensityOverFrame(frameIndex);
+    
+    % Return as RGB
+    color = [intensity, intensity, intensity];
 end
