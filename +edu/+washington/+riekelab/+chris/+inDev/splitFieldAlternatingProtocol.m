@@ -1,4 +1,4 @@
-classdef splitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     
     properties
         preTime = 0 % ms
@@ -96,7 +96,7 @@ classdef splitFieldAlternatingProtocol < edu.washington.riekelab.protocols.Rieke
             p.setBackgroundColor(min(obj.leftMeanIntensity)); % Set background intensity
             
             % Create split field rectangle stimulus
-            splitField = edu.washington.riekelab.chris.inDev.SplitFieldRectangle();
+            splitField = stage.builtin.stimuli.SplitFieldRectangle();
             splitField.position = canvasSize/2;                  % Center on screen
             
             % Set size to cover the whole canvas or aperture

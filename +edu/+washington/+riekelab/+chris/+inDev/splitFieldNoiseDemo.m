@@ -31,10 +31,10 @@ end
 
 function runEpoch(canvas, epochNum, params)
     % Create the split field rectangle stimulus
-    rect=edu.washington.riekelab.chris.inDev.SplitFieldRectangle();
+    rect = stage.builtin.stimuli.SplitFieldRectangle();
     rect.position = canvas.size/2;                  % Center on screen
     rect.size = [400, 200];                         % Overall rectangle size (width, height)
-    rect.gapSize = params.gapSize;                  % Set fixed gap size
+    rect.gapSize = params.gapSize;                  % Set fixed gap size in pixels
     rect.middleColor = [params.middleIntensity, params.middleIntensity, params.middleIntensity]; % Set fixed middle intensity
     
     % Set up the random noise for this epoch
@@ -74,7 +74,7 @@ function runEpoch(canvas, epochNum, params)
     
     % Create controller for right field intensity - follow the precomputed noise pattern
     rightIntensityController = stage.builtin.controllers.PropertyController(rect, 'rightColor', ...
-        @(state)getRightIntensity(state.time, duration, intensityOverFrame, framePerPeriod));
+        @(state)getRightIntensity(state.frame, params.frameDwell, intensityOverFrame, framePerPeriod));
     
     % Create a presentation and add the stimulus and controllers
     presentation = stage.core.Presentation(duration);
@@ -100,13 +100,19 @@ function color = getLeftIntensity(time, duration, meanIntensities)
 end
 
 % Function to determine right field intensity based on precomputed noise pattern
-function color = getRightIntensity(time, duration, intensityOverFrame, framePerPeriod)
+function color = getRightIntensity(frame, frameDwell, intensityOverFrame, framePerPeriod)
     % Calculate which frame we are in
-    progress = time / duration;
-    frameIndex = max(1, min(framePerPeriod, round(progress * framePerPeriod)));
-    
-    % Get the intensity for this frame
-    intensity = intensityOverFrame(frameIndex);
+    persistent intensity;
+    if frame == 0
+        % Initialize intensity for the first frame
+        intensity = intensityOverFrame(1);
+    elseif mod(frame, frameDwell) == 0
+        % Update intensity at appropriate frames based on frameDwell
+        frameIndex = (frame - mod(frame, frameDwell)) / frameDwell + 1;
+        if frameIndex <= length(intensityOverFrame)
+            intensity = intensityOverFrame(frameIndex);
+        end
+    end
     
     % Return as RGB
     color = [intensity, intensity, intensity];
