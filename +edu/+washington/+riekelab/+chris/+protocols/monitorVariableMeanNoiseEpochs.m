@@ -91,6 +91,7 @@ classdef monitorVariableMeanNoiseEpochs < edu.washington.riekelab.protocols.Riek
             noiseRect.position = canvasSize/2;
             p.addStimulus(noiseRect);
             preFrames = round(60 * (obj.preTime/1e3));
+
             noiseValue = stage.builtin.controllers.PropertyController(noiseRect, 'color',...
                 @(state)getNoiseIntensity(obj,state.frame - preFrames, obj.intensityOverFrame));
             p.addController(noiseValue); %add the controller

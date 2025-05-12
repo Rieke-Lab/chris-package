@@ -1,4 +1,4 @@
-classdef SplitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
+classdef splitFieldAlternatingProtocol < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     
     properties
         preTime = 0 % ms
