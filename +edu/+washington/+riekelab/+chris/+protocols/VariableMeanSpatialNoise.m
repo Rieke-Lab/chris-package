@@ -2,7 +2,7 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
     properties
         amp                             % Output amplifier
         preTime = 250                   % Noise leading duration (ms)
-        stimTime = 3000                 % Duration of noise sequence (ms)
+        stimTime = 30000                % Duration of entire long epoch (ms) - increased default
         tailTime = 250                  % Noise trailing duration (ms)
         contrast = 1
         stixelSizes = [90,90]           % Edge length of stixel (microns)
@@ -10,11 +10,12 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         gaussianFilter = false          % Whether to use a Gaussian filter
         filterSdStixels = 1.0           % Gaussian filter standard dev in stixels.
         meanLightLevels = [0.06, 0.5]  % Mean light intensity levels to alternate between (0-1)
+        switchTime = 3000               % Time to switch between means within epoch (ms)
         frameDwells = uint16([1,1])     % Frame dwell.
         useRepeatSeed = false           % Use same seed across all epochs for identical sequences
-        chromaticClass = 'achromatic'           % Chromatic type
+        chromaticClass = 'achromatic'   % Chromatic type
         onlineAnalysis = 'none'
-        numberOfAverages = uint16(600)  % Number of epochs (increased for short epochs)
+        numberOfAverages = uint16(10)   % Number of long epochs (reduced default)
     end
     
     properties (Hidden)
@@ -36,6 +37,9 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         seed
         epochSeed                       % Seed for this specific epoch
         numFrames
+        switchFrames                    % Frames at which to switch means
+        totalSwitches                   % Total number of switches in epoch
+        intensityTrace                  % Frame-by-frame intensity trace
         stixelSizePix
         stixelShiftPix
         imageMatrix
@@ -66,6 +70,14 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             obj.numFrames = floor(obj.stimTime * 1e-3 * obj.frameRate)+15;
             obj.pre_frames = round(obj.preTime * 1e-3 * 60.0);
             obj.stim_frames = round(obj.stimTime * 1e-3 * 60.0);
+            
+            % Calculate switch frames
+            switchTimeFrames = round(obj.switchTime * 1e-3 * 60.0);
+            obj.totalSwitches = floor(obj.stim_frames / switchTimeFrames);
+            obj.switchFrames = (1:obj.totalSwitches) * switchTimeFrames;
+            
+            % Initialize intensity trace
+            obj.intensityTrace = zeros(1, obj.stim_frames);
 
             if ~isempty(strfind(obj.rig.getDevice('Stage').name, 'LightCrafter'))
                 obj.chromaticClass = 'achromatic';
@@ -101,6 +113,20 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             end            
         end
         
+        % Get current mean intensity based on frame number
+        function intensity = getCurrentMeanIntensity(obj, frame)
+            if frame <= 0
+                intensity = obj.meanLightLevels(1);
+                return;
+            end
+            
+            % Determine which switch period we're in
+            switchTimeFrames = round(obj.switchTime * 1e-3 * 60.0);
+            switchIndex = floor((frame - 1) / switchTimeFrames);
+            meanIndex = mod(switchIndex, length(obj.meanLightLevels)) + 1;
+            intensity = obj.meanLightLevels(meanIndex);
+        end
+        
         % Create a Gaussian filter for the stimulus.
         function h = get_gaussian_filter(obj)
             p2 = (2*ceil(2*obj.filterSdStixels)+1) * ones(1,2);
@@ -123,9 +149,12 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         function p = createPresentation(obj)
 
             p = stage.core.Presentation((obj.preTime + obj.stimTime + obj.tailTime) * 1e-3 * obj.time_multiple);
-            p.setBackgroundColor(obj.backgroundIntensity);
+            
+            % Start with first mean level
+            initialIntensity = obj.meanLightLevels(1);
+            p.setBackgroundColor(initialIntensity);
 
-            obj.imageMatrix = obj.backgroundIntensity * ones(obj.numYStixels,obj.numXStixels);
+            obj.imageMatrix = initialIntensity * ones(obj.numYStixels,obj.numXStixels);
             checkerboard = stage.builtin.stimuli.Image(uint8(obj.imageMatrix));
             checkerboard.position = obj.canvasSize / 2;
             checkerboard.size = [obj.numXStixels, obj.numYStixels] * obj.stixelSizePix;
@@ -151,12 +180,12 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3 * 1.011);
             p.addController(gridVisible);
             
-            % Calculate preFrames and stimFrames
+            % Calculate preFrames
             preF = floor(obj.preTime/1000 * 60);
 
             if ~isempty(strfind(obj.rig.getDevice('Stage').name, 'LightCrafter'))
                 imgController = stage.builtin.controllers.PropertyController(checkerboard, 'imageMatrix',...
-                    @(state)setStixelsPatternMode(obj, state.time - obj.preTime*1e-3));
+                    @(state)setStixelsPatternMode(obj, state.time - obj.preTime*1e-3, state.frame - preF));
             elseif ~strcmp(obj.chromaticClass,'achromatic')
                 if strcmp(obj.chromaticClass,'BY')
                     imgController = stage.builtin.controllers.PropertyController(checkerboard, 'imageMatrix',...
@@ -177,11 +206,16 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             end
             p.addController(imgController);
             
+            % Background controller to change mean intensity
+            backgroundController = stage.builtin.controllers.PropertyController(p, 'backgroundColor',...
+                @(state)obj.getCurrentMeanIntensity(state.frame - preF));
+            p.addController(backgroundController);
+            
             % Position controller
             if obj.stepsPerStixel > 1
                 if ~isempty(strfind(obj.rig.getDevice('Stage').name, 'LightCrafter')) % Pattern mode
                     xyController = stage.builtin.controllers.PropertyController(checkerboard, 'position',...
-                        @(state)setJitterPatternMode(obj, state.time - obj.preTime*1e-3));
+                        @(state)setJitterPatternMode(obj, state.time - obj.preTime*1e-3, state.frame - preF));
                 else
                     xyController = stage.builtin.controllers.PropertyController(checkerboard, 'position',...
                         @(state)setJitter(obj, state.frame - preF));
@@ -191,10 +225,13 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             
             function s = setStixels(obj, frame)
                 persistent M;
-                if frame > 0
+                if frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     if mod(frame, obj.frameDwell) == 0
                         M = 2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels)>0.5)-1;
-                        M = obj.contrast*M*obj.backgroundIntensity + obj.backgroundIntensity;
+                        M = obj.contrast*M*currentIntensity + currentIntensity;
                     end
                 else
                     M = obj.imageMatrix;
@@ -202,10 +239,13 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 s = uint8(255*M);
             end
 
-            function s = setStixelsPatternMode(obj, time)
-                if time > 0
+            function s = setStixelsPatternMode(obj, time, frame)
+                if time > 0 && frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     M = 2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels)>0.5)-1;
-                    M = obj.contrast*M*obj.backgroundIntensity + obj.backgroundIntensity;
+                    M = obj.contrast*M*currentIntensity + currentIntensity;
                 else
                     M = obj.imageMatrix;
                 end
@@ -215,11 +255,14 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             % RGB noise
             function s = setRGBStixels(obj, frame)
                 persistent M;
-                if frame > 0
+                if frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     if mod(frame, obj.frameDwell) == 0
                         M = 2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels,3)>0.5)-1;
                     end
-                    M = obj.contrast*M*obj.backgroundIntensity + obj.backgroundIntensity;
+                    M = obj.contrast*M*currentIntensity + currentIntensity;
                 else
                     M = obj.imageMatrix;
                 end
@@ -229,11 +272,14 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             % Blue-Yellow noise
             function s = setBYStixels(obj, frame)
                 persistent M;
-                if frame > 0
+                if frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     if mod(frame, obj.frameDwell) == 0
                         M = zeros(obj.numYStixels,obj.numXStixels,3);
                         tmpM = obj.contrast*(2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels,2)>0.5)-1);
-                        tmpM = tmpM*obj.backgroundIntensity + obj.backgroundIntensity;
+                        tmpM = tmpM*currentIntensity + currentIntensity;
                         M(:,:,1:2) = repmat(tmpM(:,:,1),[1,1,2]);
                         M(:,:,3) = tmpM(:,:,2);
                     end
@@ -247,14 +293,17 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             function s = setBStixels(obj, frame)
                 persistent M;
                 w = [0.8648,-0.3985,1];
-                if frame > 0
+                if frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     if mod(frame, obj.frameDwell) == 0
                         M = zeros(obj.numYStixels,obj.numXStixels,3);
                         tmpM = obj.contrast*(2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels)>0.5)-1);
                         M(:,:,1) = tmpM*w(1);
                         M(:,:,2) = tmpM*w(2);
                         M(:,:,3) = tmpM*w(3);
-                        M = M*obj.backgroundIntensity + obj.backgroundIntensity;
+                        M = M*currentIntensity + currentIntensity;
                     end
                 else
                     M = obj.imageMatrix;
@@ -265,14 +314,17 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             % Cone-iso noise
             function s = setIsoStixels(obj, frame)
                 persistent M;
-                if frame > 0
+                if frame > 0 && frame <= obj.stim_frames
+                    currentIntensity = obj.getCurrentMeanIntensity(frame);
+                    obj.intensityTrace(frame) = currentIntensity;
+                    
                     if mod(frame, obj.frameDwell) == 0
                         M = zeros(obj.numYStixels,obj.numXStixels,3);
                         tmpM = obj.contrast*(2*(obj.noiseStream.rand(obj.numYStixels,obj.numXStixels)>0.5)-1);
                         M(:,:,1) = tmpM*obj.colorWeights(1);
                         M(:,:,2) = tmpM*obj.colorWeights(2);
                         M(:,:,3) = tmpM*obj.colorWeights(3);
-                        M = M * obj.backgroundIntensity + obj.backgroundIntensity;
+                        M = M * currentIntensity + currentIntensity;
                     end
                 else
                     M = obj.imageMatrix;
@@ -293,7 +345,7 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 p = xy;
             end
 
-            function p = setJitterPatternMode(obj, time)
+            function p = setJitterPatternMode(obj, time, frame)
                 if time > 0
                     xy = obj.stixelShiftPix*round((obj.stepsPerStixel-1)*(obj.positionStream.rand(1,2))) ...
                         + obj.canvasSize / 2;
@@ -326,9 +378,8 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 obj.colorWeights = [1;1;0];
             end
             
-            % Determine mean level for this epoch
-            obj.meanIndex = mod(obj.numEpochsCompleted, length(obj.meanLightLevels)) + 1;
-            obj.backgroundIntensity = obj.meanLightLevels(obj.meanIndex);
+            % Initialize intensity trace for this epoch
+            obj.intensityTrace = zeros(1, obj.stim_frames);
             
             % Get the current stixel size.
             obj.stixelSize = obj.stixelSizes(mod(obj.numEpochsCompleted, length(obj.stixelSizes))+1);
@@ -339,10 +390,8 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 % Use same seed for all epochs - creates identical sequences
                 obj.epochSeed = obj.seed;
             else
-                % Different seed for each epoch pair (same mean level gets same seed)
-                % This ensures that when you cycle back to the same mean level,
-                % you get different noise patterns
-                obj.epochSeed = obj.seed + floor(obj.numEpochsCompleted / length(obj.meanLightLevels));
+                % Different seed for each epoch
+                obj.epochSeed = obj.seed + obj.numEpochsCompleted;
             end
             
             obj.stepsPerStixel = max(round(obj.stixelSize / obj.gridSize), 1);
@@ -359,7 +408,7 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             
             disp(['num checks, x: ',num2str(obj.numXChecks),'; y: ',num2str(obj.numYChecks)]);
             disp(['num stixels, x: ',num2str(obj.numXStixels),'; y: ',num2str(obj.numYStixels)]);
-            disp(['mean level index: ',num2str(obj.meanIndex),'; intensity: ',num2str(obj.backgroundIntensity)]);
+            disp(['total switches: ',num2str(obj.totalSwitches),'; switch time: ',num2str(obj.switchTime),'ms']);
             disp(['epoch seed: ',num2str(obj.epochSeed),'; use repeat: ',num2str(obj.useRepeatSeed)]);
             
             % Seed the generator
@@ -368,9 +417,10 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
              
             epoch.addParameter('seed', obj.epochSeed);
             epoch.addParameter('baseSeed', obj.seed);
-            epoch.addParameter('meanLevel', obj.backgroundIntensity);
-            epoch.addParameter('meanIndex', obj.meanIndex);
-            epoch.addParameter('backgroundIntensity', obj.backgroundIntensity);
+            epoch.addParameter('switchTime', obj.switchTime);
+            epoch.addParameter('switchFrames', obj.switchFrames);
+            epoch.addParameter('totalSwitches', obj.totalSwitches);
+            epoch.addParameter('meanLightLevels', obj.meanLightLevels);
             epoch.addParameter('useRepeatSeed', obj.useRepeatSeed);
             epoch.addParameter('numXChecks', obj.numXChecks);
             epoch.addParameter('numYChecks', obj.numYChecks);
@@ -382,6 +432,13 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             epoch.addParameter('frameDwell', obj.frameDwell);
             epoch.addParameter('pre_frames', obj.pre_frames);
             epoch.addParameter('stim_frames', obj.stim_frames);
+        end
+        
+        function completeEpoch(obj, epoch)
+            completeEpoch@manookinlab.protocols.ManookinLabStageProtocol(obj, epoch);
+            
+            % Save the intensity trace for this epoch
+            epoch.addParameter('intensityTrace', obj.intensityTrace);
         end
         
         function a = get.amp2(obj)
