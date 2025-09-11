@@ -170,8 +170,7 @@ classdef splitFieldAlternatingProtocol < edu.washington.riekelab.protocols.Rieke
                             intensity = intensityArray(frameIndex);
                         end
                     end
-                end
-                
+                end         
                 c = [intensity, intensity, intensity];
             end
         end
