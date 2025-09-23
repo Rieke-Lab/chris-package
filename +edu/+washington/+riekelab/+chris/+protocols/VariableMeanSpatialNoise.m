@@ -9,7 +9,6 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         contrast = 1                    % Contrast of noise
         stixelSizes = [90,90]           % Edge length of stixel (microns)
         gridSize = 30                   % Size of underlying grid
-        gaussianFilter = false          % Whether to use a Gaussian filter
         filterSdStixels = 1.0           % Gaussian filter standard dev in stixels
         frameDwells = uint16([1,1])     % Frame dwell
         onlineAnalysis = 'none'
@@ -40,17 +39,16 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         
         % Variable mean specific properties
         totalFrames
+        preFrames
+        stimFrames
+        tailFrames
         framesPerSwitch
         numSwitches
         meanSequence        % Mean intensity for each frame
         intensityTrace      % Pre-computed intensity trace for all frames
         positionTrace       % Pre-computed position values for all frames
     end
-    
-    properties (Dependent, SetAccess = private)
-        amp2                            % Secondary amplifier
-    end
-    
+
     methods
         function didSetRig(obj)
             didSetRig@manookinlab.protocols.ManookinLabStageProtocol(obj);
@@ -60,8 +58,6 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         function prepareRun(obj)
             prepareRun@manookinlab.protocols.ManookinLabStageProtocol(obj);
             
-            % Calculate frame parameters
-            obj.frameRate = obj.rig.getDevice('Stage').getMonitorRefreshRate();
             obj.totalFrames = ceil(obj.stimTime * 1e-3 * obj.frameRate);
             obj.framesPerSwitch = round(obj.meanSwitchInterval * 1e-3 * obj.frameRate);
             obj.numSwitches = ceil(obj.totalFrames / obj.framesPerSwitch);
@@ -80,35 +76,9 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
                 obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
             end
             
-            if obj.gaussianFilter
-                % Get the gamma ramps
-                [r,g,b] = obj.rig.getDevice('Stage').getMonitorGammaRamp();
-                obj.monitor_gamma = [r;g;b];
-                gamma_scale = 0.5/(0.5539*exp(-0.8589*obj.filterSdStixels)+0.05732);
-                new_gamma = 65535*(0.5*gamma_scale*linspace(-1,1,256)+0.5);
-                new_gamma(new_gamma < 0) = 0;
-                new_gamma(new_gamma > 65535) = 65535;
-                obj.rig.getDevice('Stage').setMonitorGammaRamp(new_gamma, new_gamma, new_gamma);
-            end            
+    
         end
         
-        % Create a Gaussian filter for the stimulus
-        function h = get_gaussian_filter(obj)
-            p2 = (2*ceil(2*obj.filterSdStixels)+1) * ones(1,2);
-            siz   = (p2-1)/2;
-            std   = obj.filterSdStixels;
-
-            [x,y] = meshgrid(-siz(2):siz(2),-siz(1):siz(1));
-            arg   = -(x.*x + y.*y)/(2*std*std);
-
-            h     = exp(arg);
-            h(h<eps*max(h(:))) = 0;
-
-            sumh = sum(h(:));
-            if sumh ~= 0
-                h  = h/sumh;
-            end
-        end
         
         function precomputeTraces(obj)
             % Pre-compute the mean intensity sequence
@@ -169,16 +139,7 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             % Set the minifying and magnifying functions to form discrete stixels
             checkerboard.setMinFunction(GL.NEAREST);
             checkerboard.setMagFunction(GL.NEAREST);
-            
-            % Get the filter
-            if obj.gaussianFilter
-                kernel = obj.get_gaussian_filter(); 
-                filter = stage.core.Filter(kernel);
-                checkerboard.setFilter(filter);
-                checkerboard.setWrapModeS(GL.MIRRORED_REPEAT);
-                checkerboard.setWrapModeT(GL.MIRRORED_REPEAT);
-            end
-            
+
             % Add the stimulus to the presentation
             p.addStimulus(checkerboard);
             
@@ -329,15 +290,6 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
             disp(['Mean intensities: ', num2str(obj.meanIntensities)]);
         end
         
-        function a = get.amp2(obj)
-            amps = obj.rig.getDeviceNames('Amp');
-            if numel(amps) < 2
-                a = '(None)';
-            else
-                i = find(~ismember(amps, obj.amp), 1);
-                a = amps{i};
-            end
-        end
         
         function tf = shouldContinuePreparingEpochs(obj)
             tf = obj.numEpochsPrepared < obj.numberOfAverages;
@@ -346,13 +298,6 @@ classdef VariableMeanSpatialNoise < manookinlab.protocols.ManookinLabStageProtoc
         function tf = shouldContinueRun(obj)
             tf = obj.numEpochsCompleted < obj.numberOfAverages;
         end
-        
-        function completeRun(obj)
-            completeRun@manookinlab.protocols.ManookinLabStageProtocol(obj);
-            % Reset the Gamma back to the original
-            if obj.gaussianFilter
-                obj.rig.getDevice('Stage').setMonitorGammaRamp(obj.monitor_gamma(1,:), obj.monitor_gamma(2,:), obj.monitor_gamma(3,:));
-            end
-        end
+
     end
 end
