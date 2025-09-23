@@ -69,13 +69,19 @@ classdef monitorSinusoidNoiseEpochs < edu.washington.riekelab.protocols.RiekeLab
             prepareEpoch@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj, epoch);
             device = obj.rig.getDevice(obj.amp);
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
+            
+            stimPattern = {'sinusoidOnly', ...
+                'sinusoidPlusNoise', 'sinusoidPlusNoise', 'sinusoidPlusNoise', ...
+                'sinusoidPlusNoise', 'sinusoidPlusNoise', 'sinusoidPlusNoise', ...
+                'noiseOnly', 'noiseOnly', 'noiseOnly'};
 
-            % Automatically determine stimulus type based on epoch number
-            stimTypes = {'sinusoidOnly', 'noiseOnly', 'sinusoidPlusNoise'};
-            currentStimType = stimTypes{mod(obj.numEpochsCompleted, 3) + 1};
+            patternIndex = mod(obj.numEpochsCompleted, length(stimPattern)) + 1;
+            currentStimType = stimPattern{patternIndex};
+            
+            fprintf('Epoch %d: Stimulus pattern = %s\n', obj.numEpochsCompleted + 1, currentStimType);
+
 
             obj.noiseSeed = RandStream.shuffleSeed;
-            fprintf('%s %d\n', 'current epoch::', obj.numEpochsPrepared);
             
             epochMean = obj.meanIntensity;
 

@@ -124,7 +124,7 @@ classdef SplitFieldFilterFigure < symphonyui.core.FigureHandler
             if strcmp(obj.recordingType,'extracellular') % spike recording
                 newResponse = zeros(size(epochResponseTrace));
                 % Count spikes
-                S = edu.washington.riekelab.weber.utils.spikeDetectorOnline(epochResponseTrace);
+                S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace);
                 newResponse(S.sp) = 1;
             else % intracellular - Vclamp
                 epochResponseTrace = epochResponseTrace-mean(epochResponseTrace(1:prePts)); % baseline
@@ -145,7 +145,7 @@ classdef SplitFieldFilterFigure < symphonyui.core.FigureHandler
             frameRate = obj.stageDevice.getMonitorRefreshRate();
             FMresponse = epoch.getResponse(obj.frameMonitor);
             FMdata = FMresponse.getData();
-            frameTimes = edu.washington.riekelab.weber.utils.getFrameTiming(FMdata, lightCrafterFlag);
+            frameTimes = edu.washington.riekelab.chris.utils.getFrameTiming(FMdata, lightCrafterFlag);
             preFrames = frameRate*(obj.preTime/1000);
             
             % Skip pre-frames
@@ -181,7 +181,7 @@ classdef SplitFieldFilterFigure < symphonyui.core.FigureHandler
             % Calculate and update linear filter for this mean intensity
             updateRate = (frameRate/obj.frameDwell); % hz
             filterLen = 800; % msec, length of linear filter to compute
-            freqCutoffFraction = 1; % fraction of noise update rate at which to cut off filter spectrum
+            freqCutoffFraction = 0.5; % fraction of noise update rate at which to cut off filter spectrum
             
             obj.newFilters{meanIndex} = edu.washington.riekelab.chris.utils.getLinearFilterOnline(...
                 obj.rightFieldStimuli{meanIndex}, obj.allResponses{meanIndex}, ...
