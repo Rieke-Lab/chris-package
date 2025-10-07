@@ -16,7 +16,7 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
         
         onlineAnalysis = 'extracellular'
 
-        downSample = 4
+        downSample = 1
         numberOfAverages = uint16(3)  % number of repeats to queue
         amp
     end
