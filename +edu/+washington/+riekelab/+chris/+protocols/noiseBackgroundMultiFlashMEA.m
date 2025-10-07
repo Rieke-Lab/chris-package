@@ -1,4 +1,4 @@
-classdef noiseBackgroundMultiFlash < manookinlab.protocols.ManookinLabStageProtocol
+classdef noiseBackgroundMultiFlashMEA< manookinlab.protocols.ManookinLabStageProtocol
     properties
         preTime = 1000   % ms
         stimTime = 100000  % ms
