@@ -1,4 +1,4 @@
-classdef noiseBackgroundMultiFlash < manookinlab.protocols.ManookinLabStageProtocol
+classdef noiseBackgroundMultiFlashMEA < manookinlab.protocols.ManookinLabStageProtocol
     properties
         preTime = 1000   % ms
         stimTime = 100000  % ms
@@ -6,8 +6,8 @@ classdef noiseBackgroundMultiFlash < manookinlab.protocols.ManookinLabStageProto
         
         % Checkerboard background
         checkerSize = 30  % um
-        backgroundMeanIntensity = 0.5  % 0-1
-        backgroundContrast = [0 0.25 0.5 0.75 1.0]  % contrast for checkerboard noise
+        backgroundMeanIntensity = 0.3  % 0-1
+        backgroundContrast = [0 0.03 0.06 0.09 0.12]  % contrast for checkerboard noise
         
         % Flash parameters
         flashDuration = 50  % ms
@@ -67,11 +67,7 @@ classdef noiseBackgroundMultiFlash < manookinlab.protocols.ManookinLabStageProto
                 end
             end
             
-            if ~obj.isMeaRig
-                obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            end
-            
-            obj.showFigure('manookinlab.figures.FrameTimingFigure',...
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
         end
         
