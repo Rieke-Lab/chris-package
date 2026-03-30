@@ -58,7 +58,7 @@ classdef noiseBackgroundSpotFlash < edu.washington.riekelab.protocols.RiekeLabSt
             end
             
             obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure',...
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
             
             if length(obj.stimSequence) > 1

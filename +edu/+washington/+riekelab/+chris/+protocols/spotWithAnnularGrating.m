@@ -13,9 +13,8 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
         preTime = 1000   % ms
         stimTime = 2000  % ms
         tailTime = 1000  % ms
-        
-        onlineAnalysis = 'extracellular'
 
+        onlineAnalysis = 'extracellular'
         downSample = 1
         numberOfAverages = uint16(3)  % number of repeats to queue
         amp
@@ -30,6 +29,7 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
         currentBarWidth
         currentBrightContrast
         currentDarkContrast
+        currentGratingPolarity
         stimSequence
     end
     
@@ -82,9 +82,16 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
             obj.currentBrightContrast = obj.stimSequence(stimIndex, 2);
             obj.currentDarkContrast = obj.stimSequence(stimIndex, 3);
             
+            if (mod(floor(obj.numEpochsCompleted/size(obj.stimSequence, 1)), 2) == 0)
+                obj.currentGratingPolarity = 1;
+            else
+                obj.currentGratingPolarity = -1;
+            end
+            
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentBrightContrast', obj.currentBrightContrast);
             epoch.addParameter('currentDarkContrast', obj.currentDarkContrast);
+            epoch.addParameter('currentGratingPolarity', obj.currentGratingPolarity);
         end
         
         function p = createPresentation(obj)
@@ -99,7 +106,7 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
             
             % Create the annular grating image
             gratingImage = obj.createAnnularGrating(canvasSize, apertureDiameterPix, ...
-                annulusInnerDiameterPix, annulusOuterDiameterPix, currentBarWidthPix);
+                annulusInnerDiameterPix, annulusOuterDiameterPix, currentBarWidthPix, obj.currentGratingPolarity);
             
             % Display grating as image stimulus
             scene = stage.builtin.stimuli.Image(gratingImage);
@@ -128,14 +135,14 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
         end
         
         function gratingImage = createAnnularGrating(obj, canvasSize, apertureDiameterPix, ...
-                annulusInnerDiameterPix, annulusOuterDiameterPix, currentBarWidthPix)
+                annulusInnerDiameterPix, annulusOuterDiameterPix, currentBarWidthPix, currentGratingPolarity)
             
             % Create coordinate system
             [x, y] = meshgrid(linspace(-canvasSize(1)/2, canvasSize(1)/2, canvasSize(1)/obj.downSample), ...
                               linspace(-canvasSize(2)/2, canvasSize(2)/2, canvasSize(2)/obj.downSample));
             
             % Create square wave grating
-            grating = sign(sin(2*pi*x/currentBarWidthPix));
+            grating = currentGratingPolarity * sign(sin(2*pi*x/currentBarWidthPix));
             
             % Apply contrasts to bright and dark bars
             brightBars = (grating > 0);
