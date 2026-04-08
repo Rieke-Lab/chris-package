@@ -1,4 +1,32 @@
 classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
+    % Online LN analysis for LED stimuli with phase-separated filters.
+    %
+    % This version reconstructs stimulus components from epoch parameters
+    % instead of relying on sinusoidValues/noiseValues being directly stored
+    % in the epoch.
+    %
+    % Required epoch parameters:
+    %   stimulusTag
+    %   noiseSeed
+    %   preTime
+    %   stimTime
+    %   tailTime
+    %   meanIntensity
+    %   noiseStdv
+    %   temporalContrast
+    %   temporalFrequency
+    %   frequencyCutoff
+    %   numberOfFilters
+    %   stimulusSampleRate
+    %
+    % Optional epoch parameters:
+    %   sinusoidValues
+    %   noiseValues
+    %
+    % stimulusTag should be one of:
+    %   'sinusoidOnly'
+    %   'noiseOnly'
+    %   'sinusoidPlusNoise'
 
     properties (SetAccess = private)
         ampDevice
@@ -6,26 +34,27 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
         recordingType
         preTime
         stimTime
-        sampleRate  % Added sample rate property
+        sampleRate
         figureTitle
     end
 
     properties (Access = private)
         axesHandle
-        % Line handles for filters
+
+        % Linear-filter plot handles
         risingLineHandle
         fallingLineHandle
         noiseOnlyLineHandle
 
-        % Line handles for nonlinearities
+        % Nonlinearity plot handles
         risingLnDataHandle
         fallingLnDataHandle
         noiseOnlyLnDataHandle
 
-        % Storage for sinusoid-only responses (for subtraction)
-        sinusoidOnlyResponse
+        % Average sinusoid-only response for subtraction
+        sinusoidOnlyResponses
 
-        % Storage for stimuli and responses
+        % Accumulated data (rows = trials)
         allRisingStimuli
         allRisingResponses
         allFallingStimuli
@@ -33,7 +62,7 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
         allNoiseOnlyStimuli
         allNoiseOnlyResponses
 
-        % Filters
+        % Current filters
         risingFilter
         fallingFilter
         noiseOnlyFilter
@@ -50,6 +79,7 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
         filterTimes
         epochCount
     end
+
     methods
 
         function obj = LedPhaseLinearFilterFigure(ampDevice, ledDevice, varargin)
@@ -57,67 +87,78 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
             obj.ledDevice = ledDevice;
 
             ip = inputParser();
-            ip.addParameter('recordingType', [], @(x)ischar(x));
-            ip.addParameter('preTime', [], @(x)isvector(x));
-            ip.addParameter('stimTime', [], @(x)isvector(x));
-            ip.addParameter('sampleRate', 1000, @(x)isnumeric(x)); % Default to 1000 Hz but allow override
-            ip.addParameter('figureTitle','LED Phase-separated Linear-Nonlinear analysis', @(x)ischar(x));
+            ip.addParameter('recordingType', [], @(x)ischar(x) || isstring(x));
+            ip.addParameter('preTime', [], @(x)isnumeric(x) && isscalar(x));
+            ip.addParameter('stimTime', [], @(x)isnumeric(x) && isscalar(x));
+            ip.addParameter('sampleRate', 1000, @(x)isnumeric(x) && isscalar(x) && x > 0);
+            ip.addParameter('figureTitle', 'LED Phase-separated Linear-Nonlinear analysis', @(x)ischar(x) || isstring(x));
             ip.parse(varargin{:});
 
             if isempty(ip.Results.recordingType)
-                error('recordingType parameter is required');
+                error('LedPhaseLinearFilterFigure:MissingParam', 'recordingType parameter is required');
             end
             if isempty(ip.Results.preTime)
-                error('preTime parameter is required');
+                error('LedPhaseLinearFilterFigure:MissingParam', 'preTime parameter is required');
             end
             if isempty(ip.Results.stimTime)
-                error('stimTime parameter is required');
+                error('LedPhaseLinearFilterFigure:MissingParam', 'stimTime parameter is required');
             end
 
-            obj.recordingType = ip.Results.recordingType;
+            obj.recordingType = char(ip.Results.recordingType);
             obj.preTime = ip.Results.preTime;
             obj.stimTime = ip.Results.stimTime;
             obj.sampleRate = ip.Results.sampleRate;
-            obj.figureTitle = ip.Results.figureTitle;
+            obj.figureTitle = char(ip.Results.figureTitle);
 
-            obj.sinusoidOnlyResponse = []; % Initialize storage for sinusoid-only responses
+            obj.sinusoidOnlyResponses = [];
+
             obj.allRisingStimuli = [];
             obj.allRisingResponses = [];
             obj.allFallingStimuli = [];
             obj.allFallingResponses = [];
             obj.allNoiseOnlyStimuli = [];
             obj.allNoiseOnlyResponses = [];
+
+            obj.risingFilter = [];
+            obj.fallingFilter = [];
+            obj.noiseOnlyFilter = [];
+
+            obj.risingBinCenters = [];
+            obj.risingBinResponses = [];
+            obj.fallingBinCenters = [];
+            obj.fallingBinResponses = [];
+            obj.noiseOnlyBinCenters = [];
+            obj.noiseOnlyBinResponses = [];
+
             obj.epochCount = 0;
 
-            % Precalculate filter parameters
-            filterLen = 800; % msec
-            obj.filterPts = (filterLen/1000)*obj.sampleRate;
-            obj.filterTimes = linspace(0, filterLen, obj.filterPts);
+            filterLenMs = 800;
+            obj.filterPts = max(1, round((filterLenMs / 1000) * obj.sampleRate));
+            obj.filterTimes = (0:obj.filterPts-1) / obj.sampleRate * 1000;
 
             obj.createUi();
         end
 
         function createUi(obj)
-            obj.axesHandle(1) = subplot(2,1,1,...
-                'Parent',obj.figureHandle,...
-                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'),...
+            obj.axesHandle(1) = subplot(2,1,1, ...
+                'Parent', obj.figureHandle, ...
+                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'), ...
                 'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
                 'XTickMode', 'auto');
             xlabel(obj.axesHandle(1), 'Time (ms)');
-            ylabel(obj.axesHandle(1), 'Amp.');
-            title(obj.axesHandle(1),'Linear filters');
+            ylabel(obj.axesHandle(1), 'Filter amplitude');
+            title(obj.axesHandle(1), 'Linear filters');
+            hold(obj.axesHandle(1), 'on');
 
-            obj.axesHandle(2) = subplot(2,1,2,...
-                'Parent',obj.figureHandle,...
-                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'),...
+            obj.axesHandle(2) = subplot(2,1,2, ...
+                'Parent', obj.figureHandle, ...
+                'FontName', get(obj.figureHandle, 'DefaultUicontrolFontName'), ...
                 'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
                 'XTickMode', 'auto');
-            xlabel(obj.axesHandle(2), 'Generator Signal');
-            ylabel(obj.axesHandle(2), 'Measured');
-            title(obj.axesHandle(2),'Phase-specific nonlinearities');
-
-            legend(obj.axesHandle(1), 'show');
-            legend(obj.axesHandle(2), 'show');
+            xlabel(obj.axesHandle(2), 'Generator signal');
+            ylabel(obj.axesHandle(2), 'Measured response');
+            title(obj.axesHandle(2), 'Phase-specific nonlinearities');
+            hold(obj.axesHandle(2), 'on');
 
             obj.figureHandle.Name = obj.figureTitle;
         end
@@ -125,324 +166,734 @@ classdef LedPhaseLinearFilterFigure < symphonyui.core.FigureHandler
         function handleEpoch(obj, epoch)
             obj.epochCount = obj.epochCount + 1;
 
-            % Get stimulus type from epoch parameters
-            stimulusTag = epoch.parameters('stimulusTag');
+            % ----------------------------
+            % Required epoch metadata
+            % ----------------------------
+            if ~isKey(epoch.parameters, 'stimulusTag')
+                warning('LedPhaseLinearFilterFigure:MissingStimulusTag', ...
+                    'Epoch missing stimulusTag. Skipping epoch.');
+                return;
+            end
+            stimulusTag = char(epoch.parameters('stimulusTag'));
 
-            % Load amp data
+            % ----------------------------
+            % Load response
+            % ----------------------------
             response = epoch.getResponse(obj.ampDevice);
-            epochResponseTrace = response.getData();
+            epochResponseTrace = double(response.getData());
             responseSampleRate = response.sampleRate.quantityInBaseUnits;
 
-            % Determine response type based on recording type
-            if strcmp(obj.recordingType,'extracellular') % Spike recording
-                newResponse = zeros(size(epochResponseTrace));
-                % Count spikes
-                % Check if function exists and call it, otherwise provide alternative
-                try
-                    S = edu.washington.riekelab.utils.spikeDetectorOnline(epochResponseTrace);
-                    newResponse(S.sp) = 1;
-                catch
-                    % Simple threshold-based spike detection if custom function not available
-                    threshold = mean(epochResponseTrace) + 5 * std(epochResponseTrace);
-                    [~, spikeTimes] = findpeaks(epochResponseTrace, 'MinPeakHeight', threshold);
-                    newResponse(spikeTimes) = 1;
-                end
-            else
-                % Subtract baseline
-                baseline = mean(epochResponseTrace(1:round(responseSampleRate*obj.preTime/1000)));
-                epochResponseTrace = epochResponseTrace - baseline;
-
-                % Apply polarity adjustment based on recording type
-                if strcmp(obj.recordingType,'exc') % Measuring excitation
-                    polarity = -1;
-                elseif strcmp(obj.recordingType,'inh') % Measuring inhibition
-                    polarity = 1;
-                else
-                    polarity = 1; % Default
-                end
-                newResponse = polarity * epochResponseTrace;
-            end
-
-            % Get stimulus components from epoch parameters
-            % In the updated protocol, these are provided directly from the SinusoidPlusNoiseGenerator
-            if isKey(epoch.parameters, 'sinusoidValues')
-                sinusoidValues = epoch.parameters('sinusoidValues');
-            else
-                error('Epoch missing required sinusoidValues parameter');
-            end
-
-            if isKey(epoch.parameters, 'noiseValues')
-                noiseValues = epoch.parameters('noiseValues');
-            else
-                error('Epoch missing required noiseValues parameter');
-            end
-
-            % Calculate time points for each sample
-            responseTime = (1:length(newResponse))/responseSampleRate;
+            newResponse = obj.convertResponseTrace(epochResponseTrace, responseSampleRate);
 
             % Remove pre-time from response
-            prePts = round(responseSampleRate*obj.preTime/1000);
-            if prePts > 0
-                newResponse = newResponse(prePts+1:end);
-                responseTime = responseTime(prePts+1:end) - obj.preTime/1000;
+            prePtsResp = round(responseSampleRate * obj.preTime / 1000);
+            if prePtsResp >= numel(newResponse)
+                warning('LedPhaseLinearFilterFigure:BadPreTime', ...
+                    'preTime removes entire response trace. Skipping epoch.');
+                return;
             end
 
-            % Resample the response to match the stimulus rate
-            targetLength = round(obj.stimTime/1000 * obj.sampleRate);
-            responseResample = interp1(responseTime, newResponse, linspace(0, obj.stimTime/1000, targetLength));
+            responseTime = (0:numel(newResponse)-1) / responseSampleRate;
+            if prePtsResp > 0
+                newResponse = newResponse(prePtsResp+1:end);
+                responseTime = responseTime(prePtsResp+1:end) - obj.preTime / 1000;
+            end
 
-            % Process based on stimulus type
-            if strcmp(stimulusTag, 'sinusoidOnly')
-                % Store the sinusoid-only response for later correction
-                % This response will be subtracted from sinusoid+noise responses
-                obj.sinusoidOnlyResponse = responseResample;
+            targetLength = max(1, round(obj.stimTime / 1000 * obj.sampleRate));
+            queryTimes = (0:targetLength-1) / obj.sampleRate;
+            responseResample = interp1(responseTime, newResponse, queryTimes, 'linear', 'extrap');
+            responseResample = responseResample(:)';
 
-            elseif strcmp(stimulusTag, 'sinusoidPlusNoise')
-                % Extract the sinusoid without the mean
-                meanValue = mean(sinusoidValues);
-                sinusoidOnly = sinusoidValues - meanValue;
+            % ----------------------------
+            % Get or reconstruct stimulus components
+            % ----------------------------
+            sinusoidValues = [];
+            noiseValues = [];
 
-                % Calculate derivative to determine rising and falling phases
-                sinusoidDiff = [0, diff(sinusoidOnly)];
-                isRising = sinusoidDiff > 0;
+            if isKey(epoch.parameters, 'sinusoidValues')
+                sinusoidValues = epoch.parameters('sinusoidValues');
+            end
+            if isKey(epoch.parameters, 'noiseValues')
+                noiseValues = epoch.parameters('noiseValues');
+            end
 
-                % Remove pre and post time from stimuli
-                tailTime = epoch.parameters('tailTime');
-                stimSampleRate = length(sinusoidValues) / ((obj.preTime + obj.stimTime + tailTime) / 1000);
-                prePostPts = round(stimSampleRate*(obj.preTime)/1000);
-                if prePostPts > 0
-                    sinusoidOnly = sinusoidOnly(prePostPts+1:end-prePostPts);
-                    noiseOnly = noiseValues(prePostPts+1:end-prePostPts) - meanValue;
-                    isRising = isRising(prePostPts+1:end-prePostPts);
-                else
-                    noiseOnly = noiseValues - meanValue;
-                end
+            if isempty(sinusoidValues) || isempty(noiseValues)
+                [sinusoidValues, noiseValues] = obj.reconstructStimulusComponents(epoch);
+            end
 
-                % Resample stimulus to target sample rate
-                stimResampleTimes = linspace(0, obj.stimTime/1000, targetLength);
-                stimOriginalTimes = linspace(0, obj.stimTime/1000, length(isRising));
+            if isempty(sinusoidValues) || isempty(noiseValues)
+                warning('LedPhaseLinearFilterFigure:MissingStimulusComponents', ...
+                    'Could not obtain sinusoidValues/noiseValues. Skipping epoch.');
+                return;
+            end
 
-                isRisingResample = interp1(stimOriginalTimes, double(isRising), stimResampleTimes, 'nearest');
-                isRisingResample = isRisingResample > 0.5; % Convert back to logical
+            sinusoidValues = double(sinusoidValues(:))';
+            noiseValues = double(noiseValues(:))';
 
-                noiseResample = interp1(stimOriginalTimes, noiseOnly, stimResampleTimes);
+            % ----------------------------
+            % Dispatch by stimulus type
+            % ----------------------------
+            switch stimulusTag
+                case 'sinusoidOnly'
+                    obj.handleSinusoidOnlyEpoch(epoch, responseResample, targetLength, sinusoidValues);
 
-                % If we have sinusoid-only response, subtract it from the current response
-                % This isolates the noise-driven component of the response
-                if ~isempty(obj.sinusoidOnlyResponse) && length(obj.sinusoidOnlyResponse) == length(responseResample)
-                    % Compute average sinusoid-only response if we have multiple
-                    if size(obj.sinusoidOnlyResponse, 1) > 1
-                        avgSinusoidResponse = mean(obj.sinusoidOnlyResponse, 1);
-                    else
-                        avgSinusoidResponse = obj.sinusoidOnlyResponse;
+                case 'sinusoidPlusNoise'
+                    obj.handleSinusoidPlusNoiseEpoch(epoch, responseResample, targetLength, sinusoidValues, noiseValues);
+
+                case 'noiseOnly'
+                    obj.handleNoiseOnlyEpoch(epoch, responseResample, targetLength, noiseValues);
+
+                otherwise
+                    warning('LedPhaseLinearFilterFigure:UnknownStimulusTag', ...
+                        'Unknown stimulusTag "%s". Skipping epoch.', stimulusTag);
+                    return;
+            end
+
+            obj.updateOnlineAnalysis();
+        end
+
+        function clearFigure(obj)
+            cla(obj.axesHandle(1));
+            cla(obj.axesHandle(2));
+
+            obj.risingLineHandle = [];
+            obj.fallingLineHandle = [];
+            obj.noiseOnlyLineHandle = [];
+            obj.risingLnDataHandle = [];
+            obj.fallingLnDataHandle = [];
+            obj.noiseOnlyLnDataHandle = [];
+
+            obj.sinusoidOnlyResponses = [];
+
+            obj.allRisingStimuli = [];
+            obj.allRisingResponses = [];
+            obj.allFallingStimuli = [];
+            obj.allFallingResponses = [];
+            obj.allNoiseOnlyStimuli = [];
+            obj.allNoiseOnlyResponses = [];
+
+            obj.risingFilter = [];
+            obj.fallingFilter = [];
+            obj.noiseOnlyFilter = [];
+
+            obj.risingBinCenters = [];
+            obj.risingBinResponses = [];
+            obj.fallingBinCenters = [];
+            obj.fallingBinResponses = [];
+            obj.noiseOnlyBinCenters = [];
+            obj.noiseOnlyBinResponses = [];
+
+            obj.epochCount = 0;
+
+            xlabel(obj.axesHandle(1), 'Time (ms)');
+            ylabel(obj.axesHandle(1), 'Filter amplitude');
+            title(obj.axesHandle(1), 'Linear filters');
+            hold(obj.axesHandle(1), 'on');
+
+            xlabel(obj.axesHandle(2), 'Generator signal');
+            ylabel(obj.axesHandle(2), 'Measured response');
+            title(obj.axesHandle(2), 'Phase-specific nonlinearities');
+            hold(obj.axesHandle(2), 'on');
+        end
+    end
+
+    methods (Access = private)
+
+        function newResponse = convertResponseTrace(obj, epochResponseTrace, responseSampleRate)
+            switch lower(obj.recordingType)
+                case 'extracellular'
+                    newResponse = zeros(size(epochResponseTrace));
+                    
+                    S = edu.washington.riekelab.chris.utils.spikeDetectorOnline(epochResponseTrace);
+                    if isfield(S, 'sp') && ~isempty(S.sp)
+                        sp = S.sp;
+                        sp = sp(sp >= 1 & sp <= numel(newResponse));
+                        newResponse(sp) = 1;
                     end
 
-                    % Subtract the sinusoid-only response to isolate noise-driven component
+
+                otherwise
+                    basePts = max(1, round(responseSampleRate * obj.preTime / 1000));
+                    basePts = min(basePts, numel(epochResponseTrace));
+                    baseline = mean(epochResponseTrace(1:basePts));
+                    epochResponseTrace = epochResponseTrace - baseline;
+
+                    switch lower(obj.recordingType)
+                        case 'exc'
+                            polarity = -1;
+                        case 'inh'
+                            polarity = 1;
+                        otherwise
+                            polarity = 1;
+                    end
+                    newResponse = polarity * epochResponseTrace;
+            end
+
+            newResponse = double(newResponse(:))';
+        end
+
+        function handleSinusoidOnlyEpoch(obj, epoch, responseResample, targetLength, sinusoidValues)
+            tailTime = obj.getEpochParamOrDefault(epoch, 'tailTime', 0);
+            [sinusoidStim, ~] = obj.trimStimulusToStimWindow(epoch, sinusoidValues, tailTime);
+
+            stimResample = obj.resampleStimulus(epoch, sinusoidStim, targetLength); %#ok<NASGU>
+
+            obj.sinusoidOnlyResponses = cat(1, obj.sinusoidOnlyResponses, responseResample);
+        end
+
+        function handleSinusoidPlusNoiseEpoch(obj, epoch, responseResample, targetLength, sinusoidValues, noiseValues)
+            tailTime = obj.getEpochParamOrDefault(epoch, 'tailTime', 0);
+
+            [sinusoidStim, stimSampleRate] = obj.trimStimulusToStimWindow(epoch, sinusoidValues, tailTime);
+            [noiseStim, ~] = obj.trimStimulusToStimWindow(epoch, noiseValues, tailTime);
+
+            if isempty(sinusoidStim) || isempty(noiseStim)
+                warning('LedPhaseLinearFilterFigure:EmptyStimulus', ...
+                    'Stimulus became empty after trimming. Skipping epoch.');
+                return;
+            end
+
+            sinusoidStim = sinusoidStim - mean(sinusoidStim);
+            noiseStim = noiseStim - mean(noiseStim);
+
+            dSin = [0, diff(sinusoidStim)];
+            isRising = dSin > 0;
+
+            stimTimes = (0:numel(noiseStim)-1) / stimSampleRate;
+            queryTimes = (0:targetLength-1) / obj.sampleRate;
+
+            noiseResample = interp1(stimTimes, noiseStim, queryTimes, 'linear', 'extrap');
+            isRisingResample = interp1(stimTimes, double(isRising), queryTimes, 'nearest', 'extrap') > 0.5;
+
+            if ~isempty(obj.sinusoidOnlyResponses)
+                avgSinusoidResponse = mean(obj.sinusoidOnlyResponses, 1, 'omitnan');
+                if numel(avgSinusoidResponse) == numel(responseResample)
                     responseResample = responseResample - avgSinusoidResponse;
                 else
-                    warning('No sinusoid-only response available for subtraction or sizes don''t match');
+                    warning('LedPhaseLinearFilterFigure:SinusoidResponseSizeMismatch', ...
+                        'sinusoidOnlyResponse length mismatch. Skipping subtraction.');
                 end
-
-                % Split noise and response by phase
-                risingIndices = find(isRisingResample);
-                fallingIndices = find(~isRisingResample);
-
-                risingNoise = noiseResample(risingIndices);
-                fallingNoise = noiseResample(fallingIndices);
-
-                risingResponse = responseResample(risingIndices);
-                fallingResponse = responseResample(fallingIndices);
-
-                % Accumulate phase-specific data
-                obj.allRisingStimuli = cat(2, obj.allRisingStimuli, risingNoise);
-                obj.allRisingResponses = cat(2, obj.allRisingResponses, risingResponse);
-                obj.allFallingStimuli = cat(2, obj.allFallingStimuli, fallingNoise);
-                obj.allFallingResponses = cat(2, obj.allFallingResponses, fallingResponse);
-
-            elseif strcmp(stimulusTag, 'noiseOnly')
-                % Process noise-only epochs
-                meanValue = mean(noiseValues);
-
-                % Remove pre and post time from stimuli
-                tailTime = epoch.parameters('tailTime');
-                stimSampleRate = length(noiseValues) / ((obj.preTime + obj.stimTime + tailTime) / 1000);
-                prePostPts = round(stimSampleRate*(obj.preTime)/1000);
-                if prePostPts > 0
-                    noiseOnly = noiseValues(prePostPts+1:end-prePostPts) - meanValue;
-                else
-                    noiseOnly = noiseValues - meanValue;
-                end
-
-                % Resample stimulus to target sample rate
-                stimResampleTimes = linspace(0, obj.stimTime/1000, targetLength);
-                stimOriginalTimes = linspace(0, obj.stimTime/1000, length(noiseOnly));
-
-                noiseResample = interp1(stimOriginalTimes, noiseOnly, stimResampleTimes);
-
-                % Accumulate noise-only data
-                obj.allNoiseOnlyStimuli = cat(2, obj.allNoiseOnlyStimuli, noiseResample);
-                obj.allNoiseOnlyResponses = cat(2, obj.allNoiseOnlyResponses, responseResample);
             end
 
-            % Only compute filters if we have enough data
-            if obj.epochCount > 1
-                freqCutoffFraction = 0.5 * obj.sampleRate; % Half the sample rate as cutoff
+            risingIdx = isRisingResample(:)' == 1;
+            fallingIdx = ~risingIdx;
 
-                % Initialize plot handles if needed
-                if isempty(obj.risingLineHandle)
-                    hold(obj.axesHandle(1), 'on');
-                    hold(obj.axesHandle(2), 'on');
-                end
+            risingNoise = noiseResample(risingIdx);
+            risingResponse = responseResample(risingIdx);
 
-                % Compute filters if we have data for both phases
-                if ~isempty(obj.allRisingStimuli) && ~isempty(obj.allFallingStimuli)
-                    % Use the provided function for filter calculation
-                    obj.risingFilter = edu.washington.riekelab.util.getLinearFilterOnline(...
-                        obj.allRisingStimuli, obj.allRisingResponses, obj.sampleRate, freqCutoffFraction);
+            fallingNoise = noiseResample(fallingIdx);
+            fallingResponse = responseResample(fallingIdx);
 
-                    obj.fallingFilter = edu.washington.riekelab.util.getLinearFilterOnline(...
-                        obj.allFallingStimuli, obj.allFallingResponses, obj.sampleRate, freqCutoffFraction);
+            if numel(risingNoise) >= 5 && numel(risingNoise) == numel(risingResponse)
+                obj.allRisingStimuli = obj.appendTrialRow(obj.allRisingStimuli, risingNoise);
+                obj.allRisingResponses = obj.appendTrialRow(obj.allRisingResponses, risingResponse);
+            end
 
-                    % Ensure filters are the correct length
-                    if length(obj.risingFilter) >= obj.filterPts
-                        obj.risingFilter = obj.risingFilter(1:obj.filterPts);
-                        obj.fallingFilter = obj.fallingFilter(1:obj.filterPts);
+            if numel(fallingNoise) >= 5 && numel(fallingNoise) == numel(fallingResponse)
+                obj.allFallingStimuli = obj.appendTrialRow(obj.allFallingStimuli, fallingNoise);
+                obj.allFallingResponses = obj.appendTrialRow(obj.allFallingResponses, fallingResponse);
+            end
+        end
+
+        function handleNoiseOnlyEpoch(obj, epoch, responseResample, targetLength, noiseValues)
+            tailTime = obj.getEpochParamOrDefault(epoch, 'tailTime', 0);
+
+            [noiseStim, stimSampleRate] = obj.trimStimulusToStimWindow(epoch, noiseValues, tailTime);
+            if isempty(noiseStim)
+                warning('LedPhaseLinearFilterFigure:EmptyNoiseStimulus', ...
+                    'Noise-only stimulus became empty after trimming. Skipping epoch.');
+                return;
+            end
+
+            noiseStim = noiseStim - mean(noiseStim);
+
+            stimTimes = (0:numel(noiseStim)-1) / stimSampleRate;
+            queryTimes = (0:targetLength-1) / obj.sampleRate;
+            noiseResample = interp1(stimTimes, noiseStim, queryTimes, 'linear', 'extrap');
+
+            if numel(noiseResample) ~= numel(responseResample)
+                warning('LedPhaseLinearFilterFigure:NoiseResponseMismatch', ...
+                    'noiseOnly stimulus/response length mismatch. Skipping epoch.');
+                return;
+            end
+
+            obj.allNoiseOnlyStimuli = obj.appendTrialRow(obj.allNoiseOnlyStimuli, noiseResample);
+            obj.allNoiseOnlyResponses = obj.appendTrialRow(obj.allNoiseOnlyResponses, responseResample);
+        end
+
+        function updateOnlineAnalysis(obj)
+            if obj.epochCount < 1
+                return;
+            end
+
+            freqCutoff = 0.5 * obj.sampleRate;
+
+            if ~isempty(obj.allRisingStimuli) && ~isempty(obj.allRisingResponses) && ...
+               ~isempty(obj.allFallingStimuli) && ~isempty(obj.allFallingResponses)
+
+                obj.risingFilter = obj.getLinearFilterOnline( ...
+                    obj.allRisingStimuli, obj.allRisingResponses, obj.sampleRate, freqCutoff);
+
+                obj.fallingFilter = obj.getLinearFilterOnline( ...
+                    obj.allFallingStimuli, obj.allFallingResponses, obj.sampleRate, freqCutoff);
+
+                obj.risingFilter = obj.forceFilterLength(obj.risingFilter);
+                obj.fallingFilter = obj.forceFilterLength(obj.fallingFilter);
+
+                obj.updateFilterPlot('rising');
+                obj.updateFilterPlot('falling');
+
+                risingPrediction = obj.computePrediction(obj.allRisingStimuli, obj.risingFilter);
+                [obj.risingBinCenters, obj.risingBinResponses] = ...
+                    obj.computeNonlinearity(risingPrediction, obj.allRisingResponses);
+
+                fallingPrediction = obj.computePrediction(obj.allFallingStimuli, obj.fallingFilter);
+                [obj.fallingBinCenters, obj.fallingBinResponses] = ...
+                    obj.computeNonlinearity(fallingPrediction, obj.allFallingResponses);
+
+                obj.updateNonlinearityPlot('rising');
+                obj.updateNonlinearityPlot('falling');
+            end
+
+            if ~isempty(obj.allNoiseOnlyStimuli) && ~isempty(obj.allNoiseOnlyResponses)
+                obj.noiseOnlyFilter = obj.getLinearFilterOnline( ...
+                    obj.allNoiseOnlyStimuli, obj.allNoiseOnlyResponses, obj.sampleRate, freqCutoff);
+
+                obj.noiseOnlyFilter = obj.forceFilterLength(obj.noiseOnlyFilter);
+                obj.updateFilterPlot('noiseOnly');
+
+                noisePrediction = obj.computePrediction(obj.allNoiseOnlyStimuli, obj.noiseOnlyFilter);
+                [obj.noiseOnlyBinCenters, obj.noiseOnlyBinResponses] = ...
+                    obj.computeNonlinearity(noisePrediction, obj.allNoiseOnlyResponses);
+
+                obj.updateNonlinearityPlot('noiseOnly');
+            end
+
+            legend(obj.axesHandle(1), 'show');
+            legend(obj.axesHandle(2), 'show');
+            drawnow limitrate;
+        end
+
+        function [trimmedStim, stimSampleRate] = trimStimulusToStimWindow(obj, epoch, stimValues, tailTime)
+            stimValues = double(stimValues(:))';
+
+            if isKey(epoch.parameters, 'stimulusSampleRate')
+                stimSampleRate = double(epoch.parameters('stimulusSampleRate'));
+            else
+                totalTimeMs = obj.preTime + obj.stimTime + tailTime;
+                stimSampleRate = numel(stimValues) / (totalTimeMs / 1000);
+            end
+
+            prePts = round(stimSampleRate * obj.preTime / 1000);
+            tailPts = round(stimSampleRate * tailTime / 1000);
+
+            startIdx = prePts + 1;
+            endIdx = numel(stimValues) - tailPts;
+
+            if startIdx > endIdx || startIdx < 1 || endIdx > numel(stimValues)
+                trimmedStim = [];
+                return;
+            end
+
+            trimmedStim = stimValues(startIdx:endIdx);
+        end
+
+        function stimResample = resampleStimulus(obj, epoch, stim, targetLength)
+            if isempty(stim)
+                stimResample = [];
+                return;
+            end
+
+            if isKey(epoch.parameters, 'stimulusSampleRate')
+                stimSampleRate = double(epoch.parameters('stimulusSampleRate'));
+                originalTimes = (0:numel(stim)-1) / stimSampleRate;
+            else
+                originalTimes = linspace(0, obj.stimTime/1000, numel(stim));
+            end
+
+            queryTimes = (0:targetLength-1) / obj.sampleRate;
+            stimResample = interp1(originalTimes, stim, queryTimes, 'linear', 'extrap');
+            stimResample = stimResample(:)';
+        end
+
+        function paramValue = getEpochParamOrDefault(~, epoch, paramName, defaultValue)
+            if isKey(epoch.parameters, paramName)
+                paramValue = epoch.parameters(paramName);
+            else
+                paramValue = defaultValue;
+            end
+        end
+
+        function M = appendTrialRow(~, M, rowVec)
+            rowVec = double(rowVec(:))';
+            if isempty(M)
+                M = rowVec;
+                return;
+            end
+
+            targetLen = min(size(M,2), numel(rowVec));
+            M = M(:, 1:targetLen);
+            rowVec = rowVec(1:targetLen);
+
+            M = cat(1, M, rowVec);
+        end
+
+        function filt = forceFilterLength(obj, filt)
+            filt = double(filt(:))';
+            if numel(filt) >= obj.filterPts
+                filt = filt(1:obj.filterPts);
+            else
+                filt = [filt, zeros(1, obj.filterPts - numel(filt))];
+            end
+        end
+
+        function updateFilterPlot(obj, whichFilter)
+            switch whichFilter
+                case 'rising'
+                    if isempty(obj.risingLineHandle) || ~isvalid(obj.risingLineHandle)
+                        obj.risingLineHandle = line(obj.filterTimes, obj.risingFilter, ...
+                            'Parent', obj.axesHandle(1), ...
+                            'LineWidth', 2, ...
+                            'Color', 'r', ...
+                            'DisplayName', 'Rising phase');
                     else
-                        % Pad with zeros if too short
-                        obj.risingFilter = [obj.risingFilter, zeros(1, obj.filterPts - length(obj.risingFilter))];
-                        obj.fallingFilter = [obj.fallingFilter, zeros(1, obj.filterPts - length(obj.fallingFilter))];
+                        set(obj.risingLineHandle, 'XData', obj.filterTimes, 'YData', obj.risingFilter);
                     end
 
-                    % Update filter plots
-                    if isempty(obj.risingLineHandle)
-                        obj.risingLineHandle = line(obj.filterTimes, obj.risingFilter,...
-                            'Parent', obj.axesHandle(1),'LineWidth',2,'Color','r',...
-                            'DisplayName','Rising Phase');
-                        obj.fallingLineHandle = line(obj.filterTimes, obj.fallingFilter,...
-                            'Parent', obj.axesHandle(1),'LineWidth',2,'Color','b',...
-                            'DisplayName','Falling Phase');
+                case 'falling'
+                    if isempty(obj.fallingLineHandle) || ~isvalid(obj.fallingLineHandle)
+                        obj.fallingLineHandle = line(obj.filterTimes, obj.fallingFilter, ...
+                            'Parent', obj.axesHandle(1), ...
+                            'LineWidth', 2, ...
+                            'Color', 'b', ...
+                            'DisplayName', 'Falling phase');
                     else
-                        set(obj.risingLineHandle, 'YData', obj.risingFilter);
-                        set(obj.fallingLineHandle, 'YData', obj.fallingFilter);
+                        set(obj.fallingLineHandle, 'XData', obj.filterTimes, 'YData', obj.fallingFilter);
                     end
 
-                    % Calculate nonlinearities for rising phase
-                    risingPrediction = obj.computePrediction(obj.allRisingStimuli, obj.risingFilter);
+                case 'noiseOnly'
+                    if isempty(obj.noiseOnlyLineHandle) || ~isvalid(obj.noiseOnlyLineHandle)
+                        obj.noiseOnlyLineHandle = line(obj.filterTimes, obj.noiseOnlyFilter, ...
+                            'Parent', obj.axesHandle(1), ...
+                            'LineWidth', 2, ...
+                            'Color', 'k', ...
+                            'DisplayName', 'Noise only');
+                    else
+                        set(obj.noiseOnlyLineHandle, 'XData', obj.filterTimes, 'YData', obj.noiseOnlyFilter);
+                    end
+            end
+        end
 
-                    % Get binned responses for rising phase
-                    [obj.risingBinCenters, obj.risingBinResponses] = ...
-                        obj.computeNonlinearity(risingPrediction, obj.allRisingResponses);
-
-                    % Calculate nonlinearities for falling phase
-                    fallingPrediction = obj.computePrediction(obj.allFallingStimuli, obj.fallingFilter);
-
-                    % Get binned responses for falling phase
-                    [obj.fallingBinCenters, obj.fallingBinResponses] = ...
-                        obj.computeNonlinearity(fallingPrediction, obj.allFallingResponses);
-
-                    % Update nonlinearity plots
-                    if isempty(obj.risingLnDataHandle)
-                        obj.risingLnDataHandle = line(obj.risingBinCenters, obj.risingBinResponses,...
-                            'Parent', obj.axesHandle(2),'Color','r','LineStyle','-','Marker','o',...
-                            'DisplayName','Rising Phase');
-                        obj.fallingLnDataHandle = line(obj.fallingBinCenters, obj.fallingBinResponses,...
-                            'Parent', obj.axesHandle(2),'Color','b','LineStyle','-','Marker','o',...
-                            'DisplayName','Falling Phase');
+        function updateNonlinearityPlot(obj, whichNL)
+            switch whichNL
+                case 'rising'
+                    if isempty(obj.risingBinCenters)
+                        return;
+                    end
+                    if isempty(obj.risingLnDataHandle) || ~isvalid(obj.risingLnDataHandle)
+                        obj.risingLnDataHandle = line(obj.risingBinCenters, obj.risingBinResponses, ...
+                            'Parent', obj.axesHandle(2), ...
+                            'Color', 'r', ...
+                            'LineStyle', '-', ...
+                            'Marker', 'o', ...
+                            'DisplayName', 'Rising phase');
                     else
                         set(obj.risingLnDataHandle, 'XData', obj.risingBinCenters, 'YData', obj.risingBinResponses);
+                    end
+
+                case 'falling'
+                    if isempty(obj.fallingBinCenters)
+                        return;
+                    end
+                    if isempty(obj.fallingLnDataHandle) || ~isvalid(obj.fallingLnDataHandle)
+                        obj.fallingLnDataHandle = line(obj.fallingBinCenters, obj.fallingBinResponses, ...
+                            'Parent', obj.axesHandle(2), ...
+                            'Color', 'b', ...
+                            'LineStyle', '-', ...
+                            'Marker', 'o', ...
+                            'DisplayName', 'Falling phase');
+                    else
                         set(obj.fallingLnDataHandle, 'XData', obj.fallingBinCenters, 'YData', obj.fallingBinResponses);
                     end
-                end
 
-                % Process noise-only data if available
-                if ~isempty(obj.allNoiseOnlyStimuli)
-                    % Use the provided function for filter calculation
-                    obj.noiseOnlyFilter = obj.getLinearFilterOnline(...
-                        obj.allNoiseOnlyStimuli, obj.allNoiseOnlyResponses, obj.sampleRate, freqCutoffFraction);
-
-                    % Ensure filter is the correct length
-                    if length(obj.noiseOnlyFilter) >= obj.filterPts
-                        obj.noiseOnlyFilter = obj.noiseOnlyFilter(1:obj.filterPts);
-                    else
-                        % Pad with zeros if too short
-                        obj.noiseOnlyFilter = [obj.noiseOnlyFilter, zeros(1, obj.filterPts - length(obj.noiseOnlyFilter))];
+                case 'noiseOnly'
+                    if isempty(obj.noiseOnlyBinCenters)
+                        return;
                     end
-
-                    % Update filter plot
-                    if isempty(obj.noiseOnlyLineHandle)
-                        obj.noiseOnlyLineHandle = line(obj.filterTimes, obj.noiseOnlyFilter,...
-                            'Parent', obj.axesHandle(1),'LineWidth',2,'Color','k',...
-                            'DisplayName','Noise Only');
-                    else
-                        set(obj.noiseOnlyLineHandle, 'YData', obj.noiseOnlyFilter);
-                    end
-
-                    % Calculate noise-only nonlinearity
-                    noisePrediction = obj.computePrediction(obj.allNoiseOnlyStimuli, obj.noiseOnlyFilter);
-
-                    % Get binned responses for noise-only
-                    [obj.noiseOnlyBinCenters, obj.noiseOnlyBinResponses] = ...
-                        obj.computeNonlinearity(noisePrediction, obj.allNoiseOnlyResponses);
-
-                    % Update noise-only nonlinearity plot
-                    if isempty(obj.noiseOnlyLnDataHandle)
-                        obj.noiseOnlyLnDataHandle = line(obj.noiseOnlyBinCenters, obj.noiseOnlyBinResponses,...
-                            'Parent', obj.axesHandle(2),'Color','k','LineStyle','-','Marker','o',...
-                            'DisplayName','Noise Only');
+                    if isempty(obj.noiseOnlyLnDataHandle) || ~isvalid(obj.noiseOnlyLnDataHandle)
+                        obj.noiseOnlyLnDataHandle = line(obj.noiseOnlyBinCenters, obj.noiseOnlyBinResponses, ...
+                            'Parent', obj.axesHandle(2), ...
+                            'Color', 'k', ...
+                            'LineStyle', '-', ...
+                            'Marker', 'o', ...
+                            'DisplayName', 'Noise only');
                     else
                         set(obj.noiseOnlyLnDataHandle, 'XData', obj.noiseOnlyBinCenters, 'YData', obj.noiseOnlyBinResponses);
                     end
-                end
-
-                % Update legends
-                legend(obj.axesHandle(1), 'show');
-                legend(obj.axesHandle(2), 'show');
             end
         end
-        % Using the provided function for linear filter calculation
-        function linearFilter = getLinearFilterOnline(obj, stimulus, response, sampleRate, freqCutoff)
-            % This function will find the linear filter that changes row vector "signal" into a set of "responses" in rows.
-            % samplerate and freqCutoff (which should be the highest frequency in the signal) should be in Hz.
-            % The linear filter is a cc normalized by the power spectrum of the signal.
-            % JC 3/31/08
-            % MHT 080814
-            % For rows as trials.
-            filterFft = mean((fft(response,[],2).*conj(fft(stimulus,[],2))),1)./mean(fft(stimulus,[],2).*conj(fft(stimulus,[],2)),1);
-            freqcutoffAdjusted = round(freqCutoff/(sampleRate/length(stimulus))); % this adjusts the freq cutoff for the length
-            filterFft(:, 1+freqcutoffAdjusted:length(stimulus)-freqcutoffAdjusted) = 0;
+
+        function [sinusoidValues, noiseValues] = reconstructStimulusComponents(obj, epoch)
+            sinusoidValues = [];
+            noiseValues = [];
+
+            requiredParams = {'stimulusTag', 'noiseSeed', 'preTime', 'stimTime', ...
+                'tailTime', 'meanIntensity', 'noiseStdv', 'temporalContrast', ...
+                'temporalFrequency', 'frequencyCutoff', 'numberOfFilters', ...
+                'stimulusSampleRate'};
+
+            for i = 1:numel(requiredParams)
+                if ~isKey(epoch.parameters, requiredParams{i})
+                    warning('LedPhaseLinearFilterFigure:MissingEpochParameter', ...
+                        'Missing epoch parameter: %s', requiredParams{i});
+                    return;
+                end
+            end
+
+            seed = epoch.parameters('noiseSeed');
+            preTime = epoch.parameters('preTime');
+            stimTime = epoch.parameters('stimTime');
+            tailTime = epoch.parameters('tailTime');
+            meanIntensity = epoch.parameters('meanIntensity');
+            noiseStdv = epoch.parameters('noiseStdv');
+            temporalContrast = epoch.parameters('temporalContrast');
+            temporalFrequency = epoch.parameters('temporalFrequency');
+            frequencyCutoff = epoch.parameters('frequencyCutoff');
+            numberOfFilters = epoch.parameters('numberOfFilters');
+            stimulusSampleRate = epoch.parameters('stimulusSampleRate');
+
+            units = obj.ledDevice.background.displayUnits;
+            [upperLimit, lowerLimit] = obj.getStimulusLimits(units);
+
+            % Reconstruct sinusoid-only waveform
+            try
+                genSin = edu.washington.riekelab.chris.stimuli.SinusoidPlusNoiseGenerator();
+                genSin.preTime = preTime;
+                genSin.stimTime = stimTime;
+                genSin.tailTime = tailTime;
+                genSin.mean = meanIntensity;
+                genSin.seed = seed;
+                genSin.sampleRate = stimulusSampleRate;
+                genSin.units = units;
+                genSin.freqCutoff = frequencyCutoff;
+                genSin.numFilters = numberOfFilters;
+                genSin.temporalFrequency = temporalFrequency;
+                genSin.noiseStdv = 0;
+                genSin.temporalContrast = temporalContrast;
+                genSin.upperLimit = upperLimit;
+                genSin.lowerLimit = lowerLimit;
+
+                stimSin = genSin.generate();
+                sinusoidValues = obj.extractStimulusWaveform(stimSin);
+            catch ME
+                warning('LedPhaseLinearFilterFigure:SinusoidReconstructionFailed', ...
+                    'Failed to reconstruct sinusoid waveform: %s', ME.message);
+                sinusoidValues = [];
+            end
+
+            % Reconstruct noise-only waveform
+            try
+                genNoise = edu.washington.riekelab.chris.stimuli.SinusoidPlusNoiseGenerator();
+                genNoise.preTime = preTime;
+                genNoise.stimTime = stimTime;
+                genNoise.tailTime = tailTime;
+                genNoise.mean = meanIntensity;
+                genNoise.seed = seed;
+                genNoise.sampleRate = stimulusSampleRate;
+                genNoise.units = units;
+                genNoise.freqCutoff = frequencyCutoff;
+                genNoise.numFilters = numberOfFilters;
+                genNoise.temporalFrequency = temporalFrequency;
+                genNoise.noiseStdv = noiseStdv;
+                genNoise.temporalContrast = 0;
+                genNoise.upperLimit = upperLimit;
+                genNoise.lowerLimit = lowerLimit;
+
+                stimNoise = genNoise.generate();
+                noiseValues = obj.extractStimulusWaveform(stimNoise);
+            catch ME
+                warning('LedPhaseLinearFilterFigure:NoiseReconstructionFailed', ...
+                    'Failed to reconstruct noise waveform: %s', ME.message);
+                noiseValues = [];
+            end
+
+            if ~isempty(sinusoidValues)
+                sinusoidValues = sinusoidValues(:)';
+            end
+            if ~isempty(noiseValues)
+                noiseValues = noiseValues(:)';
+            end
+        end
+
+        function data = extractStimulusWaveform(~, stim)
+            data = [];
+
+            % Try Symphony cobj output access
+            try
+                cobj = stim.cobj;
+                output = cobj.OutputData;
+                dataObj = output.Data;
+
+                try
+                    data = double(dataObj);
+                catch
+                    try
+                        data = double(dataObj.Quantity);
+                    catch
+                    end
+                end
+            catch
+            end
+
+            % Alternate API path
+            if isempty(data)
+                try
+                    cobj = stim.cobj;
+                    output = cobj.getOutputData();
+                    dataObj = output.Data;
+                    try
+                        data = double(dataObj);
+                    catch
+                        try
+                            data = double(dataObj.Quantity);
+                        catch
+                        end
+                    end
+                catch
+                end
+            end
+
+            % Fallback method if available
+            if isempty(data)
+                try
+                    data = double(stim.getData());
+                catch
+                end
+            end
+
+            if isempty(data)
+                error('Could not extract waveform data from stimulus.');
+            end
+
+            data = data(:)';
+        end
+
+        function [upperLimit, lowerLimit] = getStimulusLimits(~, units)
+            if strcmp(units, symphonyui.core.Measurement.NORMALIZED)
+                upperLimit = 1;
+                lowerLimit = 0;
+            else
+                upperLimit = 10.239;
+                lowerLimit = -10.24;
+            end
+        end
+
+    end
+
+    methods
+        function linearFilter = getLinearFilterOnline(~, stimulus, response, sampleRate, freqCutoff)
+            stimulus = double(stimulus);
+            response = double(response);
+
+            if isempty(stimulus) || isempty(response)
+                linearFilter = [];
+                return;
+            end
+
+            if size(stimulus,1) ~= size(response,1) || size(stimulus,2) ~= size(response,2)
+                error('LedPhaseLinearFilterFigure:SizeMismatch', ...
+                    'Stimulus and response must have identical size.');
+            end
+
+            nT = size(stimulus, 2);
+
+            stimFft = fft(stimulus, [], 2);
+            respFft = fft(response, [], 2);
+
+            crossSpec = mean(respFft .* conj(stimFft), 1);
+            stimPower = mean(stimFft .* conj(stimFft), 1);
+
+            stimPower = stimPower + eps;
+            filterFft = crossSpec ./ stimPower;
+
+            freqcutoffAdjusted = round(freqCutoff / (sampleRate / nT));
+            freqcutoffAdjusted = max(0, min(freqcutoffAdjusted, floor(nT/2)));
+
+            if nT > 2 * freqcutoffAdjusted + 1
+                filterFft(1 + freqcutoffAdjusted : nT - freqcutoffAdjusted) = 0;
+            end
+
             linearFilter = real(ifft(filterFft));
+            linearFilter = linearFilter(:)';
         end
 
-        function prediction = computePrediction(obj, stimulus, filter)
-            % Compute the linear prediction from stimulus and filter
-            stimulus = reshape(stimulus, 1, []);
-            prediction = conv(stimulus, filter);
-            prediction = prediction(1:length(stimulus));
+        function prediction = computePrediction(~, stimulus, filterKernel)
+            stimulus = double(stimulus);
+            filterKernel = double(filterKernel(:))';
+
+            if isempty(stimulus) || isempty(filterKernel)
+                prediction = [];
+                return;
+            end
+
+            if isvector(stimulus)
+                stimulus = stimulus(:)';
+            end
+
+            nTrials = size(stimulus, 1);
+            nPts = size(stimulus, 2);
+
+            prediction = zeros(nTrials, nPts);
+            for i = 1:nTrials
+                tmp = conv(stimulus(i,:), filterKernel, 'full');
+                prediction(i,:) = tmp(1:nPts);
+            end
         end
 
-        function [binCenters, binResponses] = computeNonlinearity(obj, prediction, response)
-            % Calculate nonlinearity from prediction and response
-            prediction = reshape(prediction, 1, []);
-            response = reshape(response, 1, []);
+        function [binCenters, binResponses] = computeNonlinearity(~, prediction, response)
+            prediction = double(prediction(:));
+            response = double(response(:));
 
-            % Create bins
-            numBins = min(30, ceil(length(prediction)/100)); % Adjust number of bins based on data size
+            valid = isfinite(prediction) & isfinite(response);
+            prediction = prediction(valid);
+            response = response(valid);
+
+            if isempty(prediction) || isempty(response)
+                binCenters = [];
+                binResponses = [];
+                return;
+            end
+
+            if numel(unique(prediction)) < 3
+                binCenters = [];
+                binResponses = [];
+                return;
+            end
+
+            numBins = min(30, max(8, ceil(numel(prediction) / 200)));
+
             [counts, edges] = histcounts(prediction, numBins);
-            binCenters = edges(1:end-1) + diff(edges)/2;
+            if isempty(edges) || numel(edges) < 2
+                binCenters = [];
+                binResponses = [];
+                return;
+            end
 
-            % Calculate mean response in each bin
-            binResponses = zeros(size(binCenters));
-            for b = 1:length(binCenters)
-                indices = (prediction >= edges(b)) & (prediction < edges(b+1));
-                if any(indices)
-                    binResponses(b) = mean(response(indices));
+            binCenters = edges(1:end-1) + diff(edges) / 2;
+            binResponses = nan(size(binCenters));
+
+            for b = 1:numel(binCenters)
+                if b < numel(binCenters)
+                    idx = prediction >= edges(b) & prediction < edges(b+1);
                 else
-                    binResponses(b) = 0;
+                    idx = prediction >= edges(b) & prediction <= edges(b+1);
+                end
+                if any(idx)
+                    binResponses(b) = mean(response(idx), 'omitnan');
                 end
             end
 
-            % Remove bins with no data
-            validBins = counts > 0;
+            validBins = counts > 0 & isfinite(binResponses);
             binCenters = binCenters(validBins);
             binResponses = binResponses(validBins);
         end
