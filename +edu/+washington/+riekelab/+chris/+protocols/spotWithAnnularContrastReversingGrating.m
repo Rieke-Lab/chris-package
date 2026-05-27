@@ -10,7 +10,7 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
         brightBarContrast = [0.9]  % positive peak of asymmetric contrast waveform
         darkBarContrast = [-0.25 -0.5 -0.75 -1.0]  % negative peak of asymmetric contrast waveform
         temporalFrequency = [2 4]  % Hz, temporal frequency of contrast reversal
-        temporalClass = 'sinewave'  % temporal waveform: sinewave or squarewave
+        %temporalClass = 'sinewave'  % temporal waveform: sinewave or squarewave
 
         preTime = 1000   % ms
         stimTime = 2000  % ms
@@ -121,6 +121,10 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
             initImage = obj.meanImage + obj.brightMaskScaled * (-An) + obj.darkMaskScaled * Ap;
             initialImage = uint8(max(0, min(255, round(initImage * 255))));
             obj.gratingImageInv = initialImage;
+%             numPts = (obj.preTime+obj.stimTime+obj.tailTime)*1e-3*obj.sampleRate;
+%             tme = [1:numPts]/obj.sampleRate - obj.preTime*1e-3;            
+%             obj.gratePolarity = sign(cos(2 * pi * obj.currentTemporalFrequency *tme));
+                        
             scene = stage.builtin.stimuli.Image(initialImage);
             scene.size = canvasSize;
             scene.position = canvasSize/2;
@@ -130,7 +134,7 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
 
             % Frame-by-frame imageMatrix controller for contrast reversal
             sceneController = stage.builtin.controllers.PropertyController(scene, 'imageMatrix', ...
-                @(state) obj.getGratingFrame(state.time));
+                @(state) obj.getGratingFrame(state.time-obj.preTime*1e-3));
             p.addController(sceneController);
 
             % Control visibility during stimTime only
@@ -206,38 +210,12 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
         end
 
         function imgMat = getGratingFrame(obj, time)
-            t = time - obj.preTime * 1e-3;  % time relative to stimulus onset
-            s = cos(2 * pi * obj.currentTemporalFrequency * t);
-             
-            % For squarewave: snap to +1 or -1
-            if strcmp(obj.temporalClass, 'squarewave')
-                s = sign(s);
-            end
+            s = sign(cos(2 * pi * obj.currentTemporalFrequency * time));
             if (s < 0)
                 imgMat = obj.gratingImage;
             else
                 imgMat = obj.gratingImageInv;
             end
-            
-%             imgMat = uint8(obj.gratingImage);
-
-             %             Ap = obj.currentBrightContrast;
-%             An = abs(obj.currentDarkContrast);
-
-            % Asymmetric scaling: positive half scaled by Ap, negative half by An
-            % Bright bars use cos (phase 0), dark bars use -cos (phase 180)
-%             if s >= 0
-%                 imgMat = obj.meanImage ...
-%                        + obj.brightMaskScaled * (Ap * s) ...
-%                        + obj.darkMaskScaled * (-An * s);
-%             else
-%                 imgMat = obj.meanImage ...
-%                        + obj.brightMaskScaled * (An * s) ...
-%                        + obj.darkMaskScaled * (-Ap * s);
-%             end
-% 
-%             % Clamp to valid range and convert to uint8
-%             imgMat = uint8(max(0, min(255, round(imgMat * 255))));
         end
 
         function tf = shouldContinuePreparingEpochs(obj)
