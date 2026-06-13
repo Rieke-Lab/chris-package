@@ -6,9 +6,15 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     %   2) MNoise   - M-cone noise, L held at mean
     %   3) LMNoise  - independent L- and M-cone noise
     %
-    % L/M cone isomerization trajectories are converted to red/green gun
-    % intensities by inverting a 2x2 RG->LM calibration matrix. The blue gun
-    % is held at 0 and S-cones are intentionally ignored.
+    % The stimulus is generated in L/M cone-isomerization units and then
+    % converted to red/green monitor gun values using the inverse of the
+    % 2x2 RG->LM calibration matrix. The blue gun is held at 0.
+    %
+    % This version precomputes each epoch's RGB time course in prepareEpoch,
+    % then the Stage controller only indexes the precomputed values during
+    % createPresentation. This follows the safer pattern used by many working
+    % noise protocols and avoids advancing random streams inside the Stage
+    % controller.
 
     properties
         preTime = 500                       % ms
@@ -16,10 +22,11 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
         tailTime = 500                      % ms
         centerDiameter = 200                % um
 
-        % Mean L and M isomerization. This is applied identically to L and M.
-        % With the placeholder calibration below, 15000 R*/sec gives roughly
-        % R=G=0.5 at the mean. Replace calibration values with rig-specific values.
-        meanIsomerization = 15000           % R*/sec
+        % Separate L and M mean isomerizations. These defaults were selected
+        % for the calibration below and 0.3 contrast to keep estimated R/G
+        % clipping typically below the tolerated fraction.
+        meanLIsomerization = 29542          % R*/sec
+        meanMIsomerization = 16827          % R*/sec
 
         % Cone-isomerization contrast: noise std / mean isomerization.
         LNoiseContrast = 0.3
@@ -28,17 +35,19 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
         % Display calibration: isomerizations per unit 0-1 gun intensity.
         % Matrix convention:
         %   [L; M] = [red->L, green->L; red->M, green->M] * [R; G]
-        redChannelIsomPerUnitL = 20000      % R*/sec per unit red gun, L-cone
-        redChannelIsomPerUnitM = 10000      % R*/sec per unit red gun, M-cone
-        greenChannelIsomPerUnitL = 10000    % R*/sec per unit green gun, L-cone
-        greenChannelIsomPerUnitM = 20000    % R*/sec per unit green gun, M-cone
+        redChannelIsomPerUnitL = 50255      % R*/sec per unit red gun, L-cone
+        redChannelIsomPerUnitM = 13750      % R*/sec per unit red gun, M-cone
+        greenChannelIsomPerUnitL = 113478   % R*/sec per unit green gun, L-cone
+        greenChannelIsomPerUnitM = 126433   % R*/sec per unit green gun, M-cone
 
         frameDwell = 2                      % monitor frames per noise update
         useRandomSeed = true                % false => fixed seeds 0/1
 
-        % Gamut/headroom safety checks.
-        headroomCheckSigma = 4              % warn if +/- this many SD exceeds gamut
-        simulateGamutInPrepareEpoch = true  % add per-epoch clipping metadata
+        % Practical clipping check. Epochs with <=10% clipped red/green
+        % samples are treated as acceptable. The trace figure and epoch
+        % metadata report the actual clipping fraction.
+        maxToleratedClipFraction = 0.10     % fraction of R/G samples; 0.10 = 10%
+        estimateClippingInPrepareEpoch = true
 
         onlineAnalysis = 'none'
         numberOfAverages = uint16(30)       % use multiples of 3 for full L/M/LM cycles
@@ -50,10 +59,12 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
         onlineAnalysisType = symphonyui.core.PropertyType('char','row',{'none','extracellular','exc','inh'})
         lNoiseSeed
         mNoiseSeed
-        lNoiseStream
-        mNoiseStream
         currentStimulus
-        backgroundRGB                       % [R; G; 0]
+        backgroundRGB                       % 1x3 [R G 0]
+        rgbOverUpdate                       % nUpdates x 3, clipped delivered RGB
+        rawRGOverUpdate                     % nUpdates x 2, unclipped R/G request
+        lIsomOverUpdate                     % 1 x nUpdates, intended L isom
+        mIsomOverUpdate                     % 1 x nUpdates, intended M isom
     end
 
     properties (Hidden, Dependent)
@@ -91,38 +102,33 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
                     double(obj.numberOfAverages));
             end
 
-            meanRG = obj.lmToRg * [obj.meanIsomerization; obj.meanIsomerization];
-            obj.backgroundRGB = [max(0, min(1, meanRG)); 0];
+            meanRG = obj.lmToRg * [obj.meanLIsomerization; obj.meanMIsomerization];
+            obj.backgroundRGB = [max(0, min(1, meanRG(1))), max(0, min(1, meanRG(2))), 0];
 
             if any(meanRG < 0) || any(meanRG > 1)
-                warning('LMConeNoise:BgOutOfRange', ...
-                    ['Mean background gun values out of [0,1]: R=%.3f G=%.3f. ', ...
-                     'Change meanIsomerization or recheck calibration.'], ...
+                warning('LMConeNoise:MeanGunOutOfRange', ...
+                    ['Mean red/green gun values are outside [0,1]: R=%.3f G=%.3f. ', ...
+                     'Change meanLIsomerization/meanMIsomerization or recheck calibration.'], ...
                     meanRG(1), meanRG(2));
             end
 
-            [rawMin, rawMax] = obj.estimateHeadroomRange(obj.headroomCheckSigma);
-            if rawMin < 0 || rawMax > 1
-                warning('LMConeNoise:LikelyClipping', ...
-                    ['%g-sigma cone-noise excursions exceed display gamut. ', ...
-                     'Raw gun range would be [%.3f, %.3f]. ', ...
-                     'Lower L/M contrast, change meanIsomerization, or recheck calibration.'], ...
-                    obj.headroomCheckSigma, rawMin, rawMax);
-            end
-
-            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
-            obj.showFigure('edu.washington.riekelab.turner.figures.FrameTimingFigure', ...
-                obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
-
-            obj.showFigure('edu.washington.riekelab.turner.figures.LMConeNoiseTraceFigure', ...
+            % Put the stimulus trace figure first so it is available even
+            % when onlineAnalysis is off.
+            obj.showFigure('edu.washington.riekelab.chris.figures.LMConeNoiseTraceFigure', ...
                 obj.rig.getDevice('Stage'), ...
                 'preTime', obj.preTime, ...
                 'stimTime', obj.stimTime, ...
                 'frameDwell', obj.frameDwell, ...
-                'meanIsom', obj.meanIsomerization, ...
+                'meanLIsom', obj.meanLIsomerization, ...
+                'meanMIsom', obj.meanMIsomerization, ...
                 'LNoiseContrast', obj.LNoiseContrast, ...
                 'MNoiseContrast', obj.MNoiseContrast, ...
-                'rgToLm', obj.rgToLm);
+                'rgToLm', obj.rgToLm, ...
+                'maxToleratedClipFraction', obj.maxToleratedClipFraction);
+
+            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', obj.rig.getDevice(obj.amp));
+            obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure', ...
+                obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
 
             if ~strcmp(obj.onlineAnalysis, 'none')
                 obj.showFigure('edu.washington.riekelab.turner.figures.LinearFilterFigure', ...
@@ -147,7 +153,7 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
                     'noiseStdv', obj.MNoiseContrast, ...
                     'figureTitle', 'M cone (LN)');
 
-                obj.showFigure('edu.washington.riekelab.turner.figures.LM2DNonlinearityFigure', ...
+                obj.showFigure('edu.washington.riekelab.chris.figures.LM2DNonlinearityFigure', ...
                     obj.rig.getDevice(obj.amp), obj.rig.getDevice('Frame Monitor'), ...
                     obj.rig.getDevice('Stage'), ...
                     'recordingType', obj.onlineAnalysis, ...
@@ -167,10 +173,10 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
             device = obj.rig.getDevice(obj.amp);
             duration = (obj.preTime + obj.stimTime + obj.tailTime) / 1e3;
-            epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
-            epoch.addResponse(device);
 
-            index = mod(obj.numEpochsCompleted, 3);
+            % Use numEpochsPrepared, not numEpochsCompleted, so queued epochs
+            % cycle properly through LNoise, MNoise, LMNoise.
+            index = mod(obj.numEpochsPrepared, 3);
             if index == 0
                 obj.currentStimulus = 'LNoise';
                 if obj.useRandomSeed
@@ -186,16 +192,27 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
                 obj.currentStimulus = 'LMNoise';
             end
 
-            obj.lNoiseStream = RandStream('mt19937ar', 'Seed', obj.lNoiseSeed);
-            obj.mNoiseStream = RandStream('mt19937ar', 'Seed', obj.mNoiseSeed);
+            [obj.lIsomOverUpdate, obj.mIsomOverUpdate, obj.rawRGOverUpdate, obj.rgbOverUpdate] = ...
+                obj.precomputeStimulus(obj.currentStimulus, obj.lNoiseSeed, obj.mNoiseSeed);
 
-            meanRG = obj.lmToRg * [obj.meanIsomerization; obj.meanIsomerization];
-            obj.backgroundRGB = [max(0, min(1, meanRG)); 0];
+            rawRG = obj.rawRGOverUpdate;
+            clipMask = rawRG < 0 | rawRG > 1;
+            clipFrac = mean(clipMask(:));
+            rawMin = min(rawRG(:));
+            rawMax = max(rawRG(:));
+
+            epoch.addDirectCurrentStimulus(device, device.background, duration, obj.sampleRate);
+            epoch.addResponse(device);
+
+            meanRG = obj.lmToRg * [obj.meanLIsomerization; obj.meanMIsomerization];
+            obj.backgroundRGB = [max(0, min(1, meanRG(1))), max(0, min(1, meanRG(2))), 0];
 
             epoch.addParameter('lNoiseSeed', obj.lNoiseSeed);
             epoch.addParameter('mNoiseSeed', obj.mNoiseSeed);
             epoch.addParameter('currentStimulus', obj.currentStimulus);
-            epoch.addParameter('meanIsomerization', obj.meanIsomerization);
+            epoch.addParameter('meanLIsomerization', obj.meanLIsomerization);
+            epoch.addParameter('meanMIsomerization', obj.meanMIsomerization);
+            epoch.addParameter('meanLMIsomerization', mean([obj.meanLIsomerization, obj.meanMIsomerization]));
             epoch.addParameter('LNoiseContrast', obj.LNoiseContrast);
             epoch.addParameter('MNoiseContrast', obj.MNoiseContrast);
             epoch.addParameter('redChannelIsomPerUnitL', obj.redChannelIsomPerUnitL);
@@ -205,16 +222,18 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
             epoch.addParameter('meanRedGun', meanRG(1));
             epoch.addParameter('meanGreenGun', meanRG(2));
 
-            if obj.simulateGamutInPrepareEpoch
-                [clipFrac, rawMin, rawMax] = obj.simulateEpochGamut(obj.currentStimulus, obj.lNoiseSeed, obj.mNoiseSeed);
+            if obj.estimateClippingInPrepareEpoch
                 epoch.addParameter('estimatedClippedGunSampleFraction', clipFrac);
                 epoch.addParameter('estimatedRawGunMin', rawMin);
                 epoch.addParameter('estimatedRawGunMax', rawMax);
-                if clipFrac > 0
-                    warning('LMConeNoise:EpochClipping', ...
-                        ['%s epoch seed L=%d M=%d has estimated %.2f%% clipped R/G samples. ', ...
-                         'Online LN/2D analysis reconstructs intended noise, so clipping will bias it.'], ...
-                        obj.currentStimulus, obj.lNoiseSeed, obj.mNoiseSeed, 100 * clipFrac);
+                epoch.addParameter('maxToleratedClipFraction', obj.maxToleratedClipFraction);
+
+                if clipFrac > obj.maxToleratedClipFraction
+                    warning('LMConeNoise:EpochClippingAboveTolerance', ...
+                        ['%s epoch seed L=%d M=%d has estimated %.2f%% clipped R/G samples, ', ...
+                         'above the tolerated %.2f%%.'], ...
+                        obj.currentStimulus, obj.lNoiseSeed, obj.mNoiseSeed, ...
+                        100 * clipFrac, 100 * obj.maxToleratedClipFraction);
                 end
             end
         end
@@ -241,31 +260,31 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
             centerSpot.color = obj.backgroundRGB;
             p.addStimulus(centerSpot);
 
+            rgbTrace = obj.rgbOverUpdate;
+            backgroundRGB = obj.backgroundRGB;
+            frameDwellLocal = obj.frameDwell;
+            nUpdates = size(rgbTrace, 1);
+
             colorCtrl = stage.builtin.controllers.PropertyController(centerSpot, 'color', ...
-                @(state)getNoiseRGB(obj, state.frame - preFrames));
+                @(state)getNoiseRGB(state.frame - preFrames, frameDwellLocal, rgbTrace, backgroundRGB, nUpdates));
             p.addController(colorCtrl);
 
             visCtrl = stage.builtin.controllers.PropertyController(centerSpot, 'visible', ...
                 @(state)state.time >= obj.preTime * 1e-3 && state.time < (obj.preTime + obj.stimTime) * 1e-3);
             p.addController(visCtrl);
 
-            function rgb = getNoiseRGB(obj, frame)
-                persistent currentRGB
-                if isempty(currentRGB)
-                    currentRGB = obj.backgroundRGB;
+            function rgb = getNoiseRGB(frame, frameDwell, rgbArray, bgRGB, n)
+                if frame < 0 || n < 1
+                    rgb = bgRGB;
+                    return;
                 end
-
-                if frame < 0
-                    currentRGB = obj.backgroundRGB;
-                else
-                    if mod(frame, obj.frameDwell) == 0
-                        [lIsom, mIsom] = obj.nextConeIsomerizations();
-                        rawRG = obj.lmToRg * [lIsom; mIsom];
-                        clippedRG = max(0, min(1, rawRG));
-                        currentRGB = [clippedRG; 0];
-                    end
+                updateIndex = floor(double(frame) / double(frameDwell)) + 1;
+                if updateIndex < 1
+                    updateIndex = 1;
+                elseif updateIndex > n
+                    updateIndex = n;
                 end
-                rgb = currentRGB;
+                rgb = rgbArray(updateIndex, :);
             end
         end
 
@@ -279,45 +298,7 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
     end
 
     methods (Access = private)
-        function [lIsom, mIsom] = nextConeIsomerizations(obj)
-            switch obj.currentStimulus
-                case 'LNoise'
-                    lIsom = obj.meanIsomerization * (1 + obj.LNoiseContrast * obj.lNoiseStream.randn);
-                    mIsom = obj.meanIsomerization;
-                case 'MNoise'
-                    lIsom = obj.meanIsomerization;
-                    mIsom = obj.meanIsomerization * (1 + obj.MNoiseContrast * obj.mNoiseStream.randn);
-                case 'LMNoise'
-                    lIsom = obj.meanIsomerization * (1 + obj.LNoiseContrast * obj.lNoiseStream.randn);
-                    mIsom = obj.meanIsomerization * (1 + obj.MNoiseContrast * obj.mNoiseStream.randn);
-                otherwise
-                    lIsom = obj.meanIsomerization;
-                    mIsom = obj.meanIsomerization;
-            end
-        end
-
-        function [rawMin, rawMax] = estimateHeadroomRange(obj, nSigma)
-            lVals = obj.meanIsomerization * [1 - nSigma * obj.LNoiseContrast, 1, 1 + nSigma * obj.LNoiseContrast];
-            mVals = obj.meanIsomerization * [1 - nSigma * obj.MNoiseContrast, 1, 1 + nSigma * obj.MNoiseContrast];
-
-            lm = [];
-            % LNoise: L varies, M fixed
-            lm = [lm, [lVals; obj.meanIsomerization * ones(size(lVals))]];
-            % MNoise: M varies, L fixed
-            lm = [lm, [obj.meanIsomerization * ones(size(mVals)); mVals]];
-            % LMNoise: both vary
-            for li = 1:numel(lVals)
-                for mi = 1:numel(mVals)
-                    lm = [lm, [lVals(li); mVals(mi)]]; %#ok<AGROW>
-                end
-            end
-
-            rg = obj.lmToRg * lm;
-            rawMin = min(rg(:));
-            rawMax = max(rg(:));
-        end
-
-        function [clipFrac, rawMin, rawMax] = simulateEpochGamut(obj, stimType, lSeed, mSeed)
+        function [lIsom, mIsom, rawRG, clippedRGB] = precomputeStimulus(obj, stimType, lSeed, mSeed)
             try
                 frameRate = obj.rig.getDevice('Stage').getMonitorRefreshRate();
             catch
@@ -328,29 +309,36 @@ classdef LMConeNoise < edu.washington.riekelab.protocols.RiekeLabStageProtocol
 
             lStream = RandStream('mt19937ar', 'Seed', lSeed);
             mStream = RandStream('mt19937ar', 'Seed', mSeed);
-            rawRG = zeros(2, nUpdates);
+
+            lIsom = zeros(1, nUpdates);
+            mIsom = zeros(1, nUpdates);
+            rawRG = zeros(nUpdates, 2);
+            clippedRGB = zeros(nUpdates, 3);
 
             for ii = 1:nUpdates
                 switch stimType
                     case 'LNoise'
-                        lIsom = obj.meanIsomerization * (1 + obj.LNoiseContrast * lStream.randn);
-                        mIsom = obj.meanIsomerization;
+                        lVal = obj.meanLIsomerization * (1 + obj.LNoiseContrast * lStream.randn);
+                        mVal = obj.meanMIsomerization;
                     case 'MNoise'
-                        lIsom = obj.meanIsomerization;
-                        mIsom = obj.meanIsomerization * (1 + obj.MNoiseContrast * mStream.randn);
+                        lVal = obj.meanLIsomerization;
+                        mVal = obj.meanMIsomerization * (1 + obj.MNoiseContrast * mStream.randn);
                     case 'LMNoise'
-                        lIsom = obj.meanIsomerization * (1 + obj.LNoiseContrast * lStream.randn);
-                        mIsom = obj.meanIsomerization * (1 + obj.MNoiseContrast * mStream.randn);
+                        lVal = obj.meanLIsomerization * (1 + obj.LNoiseContrast * lStream.randn);
+                        mVal = obj.meanMIsomerization * (1 + obj.MNoiseContrast * mStream.randn);
                     otherwise
-                        lIsom = obj.meanIsomerization;
-                        mIsom = obj.meanIsomerization;
+                        lVal = obj.meanLIsomerization;
+                        mVal = obj.meanMIsomerization;
                 end
-                rawRG(:, ii) = obj.lmToRg * [lIsom; mIsom];
-            end
 
-            rawMin = min(rawRG(:));
-            rawMax = max(rawRG(:));
-            clipFrac = mean(rawRG(:) < 0 | rawRG(:) > 1);
+                lIsom(ii) = lVal;
+                mIsom(ii) = mVal;
+
+                rg = obj.lmToRg * [lVal; mVal];
+                rawRG(ii, :) = rg(:)';
+                clippedRG = [max(0, min(1, rg(1))), max(0, min(1, rg(2)))];
+                clippedRGB(ii, :) = [clippedRG, 0];
+            end
         end
     end
 end
