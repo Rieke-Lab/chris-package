@@ -42,13 +42,19 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabStageProtocol(obj);
             
-            % Create stimulus sequence combining all parameters
+            % Create stimulus sequence: each row is [barWidth, brightC, darkC, polarity]
+            % Polarity +1 and -1 are paired so each condition gets both bright/dark
+            % arrangements (180 deg phase swap, edge stays centered) within every repeat.
+            polarities = [1, -1];
             obj.stimSequence = [];
             for bw = 1:length(obj.barWidth)
                 for bc = 1:length(obj.brightBarContrast)
                     for dc = 1:length(obj.darkBarContrast)
-                        obj.stimSequence = [obj.stimSequence; ...
-                            obj.barWidth(bw), obj.brightBarContrast(bc), obj.darkBarContrast(dc)];
+                        for pol = 1:length(polarities)
+                            obj.stimSequence = [obj.stimSequence; ...
+                                obj.barWidth(bw), obj.brightBarContrast(bc), ...
+                                obj.darkBarContrast(dc), polarities(pol)];
+                        end
                     end
                 end
             end
@@ -65,7 +71,7 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
             
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
                 obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis',...
-                'groupBy',{'currentBarWidth','currentBrightContrast','currentDarkContrast'},...
+                'groupBy',{'currentBarWidth','currentBrightContrast','currentDarkContrast','currentGratingPolarity'},...
                 'sweepColor',colors);
         end
         
@@ -81,12 +87,7 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
             obj.currentBarWidth = obj.stimSequence(stimIndex, 1);
             obj.currentBrightContrast = obj.stimSequence(stimIndex, 2);
             obj.currentDarkContrast = obj.stimSequence(stimIndex, 3);
-            
-            if (mod(floor(obj.numEpochsCompleted/size(obj.stimSequence, 1)), 2) == 0)
-                obj.currentGratingPolarity = 1;
-            else
-                obj.currentGratingPolarity = -1;
-            end
+            obj.currentGratingPolarity = obj.stimSequence(stimIndex, 4);
             
             epoch.addParameter('currentBarWidth', obj.currentBarWidth);
             epoch.addParameter('currentBrightContrast', obj.currentBrightContrast);
@@ -141,8 +142,9 @@ classdef spotWithAnnularGrating < edu.washington.riekelab.protocols.RiekeLabStag
             [x, y] = meshgrid(linspace(-canvasSize(1)/2, canvasSize(1)/2, canvasSize(1)/obj.downSample), ...
                               linspace(-canvasSize(2)/2, canvasSize(2)/2, canvasSize(2)/obj.downSample));
             
-            % Create square wave grating
-            grating = currentGratingPolarity * sign(sin(2*pi*x/currentBarWidthPix));
+            % Create square wave grating. Polarity +/-1 swaps bright/dark
+            % positions while keeping bar edges fixed (180 deg phase flip).
+            grating = currentGratingPolarity * sign(sin(2*pi*x/(2*currentBarWidthPix)));
             
             % Apply contrasts to bright and dark bars
             brightBars = (grating > 0);
