@@ -2,6 +2,7 @@ classdef LMConeNoiseTraceFigure < symphonyui.core.FigureHandler
     % LMConeNoiseTraceFigure
     %
     % Reconstructs one example epoch per stimulus type from stored seeds.
+<<<<<<< HEAD
     % Row 1: intended L/M isomerization trajectories plus delivered-after-clipping L/M.
     % Row 2: raw red/green gun trajectories plus clipped delivered values.
     % Row 3: mean L/M drive seen by the ganglion cell, defined by default as
@@ -10,6 +11,13 @@ classdef LMConeNoiseTraceFigure < symphonyui.core.FigureHandler
     %
     % This version supports separate mean L and mean M isomerization values
     % and treats clipping below maxToleratedClipFraction as acceptable.
+=======
+    % Row 1: intended and delivered L/M isomerization trajectories.
+    % Row 2: raw red/green gun values plus clipped delivered values.
+    % Row 3: combined L/M drive, usually (L + M) / 2.
+    %
+    % Compatible with MATLAB R2016b.
+>>>>>>> de9847a34ce72e064d664cf9e4f3ac1771a5f828
 
     properties (SetAccess = private)
         stageDevice
@@ -38,8 +46,12 @@ classdef LMConeNoiseTraceFigure < symphonyui.core.FigureHandler
             ip.addParameter('stimTime', 8000,      @(x)isnumeric(x));
             ip.addParameter('frameDwell', 2,       @(x)isnumeric(x));
 
+<<<<<<< HEAD
             % Backward-compatible legacy parameter. If meanLIsom/meanMIsom
             % are not supplied, both will use meanIsom.
+=======
+            % Legacy parameter. If separate means are not supplied, both use this.
+>>>>>>> de9847a34ce72e064d664cf9e4f3ac1771a5f828
             ip.addParameter('meanIsom', 15000,     @(x)isnumeric(x));
             ip.addParameter('meanLIsom', [],       @(x)isnumeric(x) || isempty(x));
             ip.addParameter('meanMIsom', [],       @(x)isnumeric(x) || isempty(x));
@@ -48,7 +60,11 @@ classdef LMConeNoiseTraceFigure < symphonyui.core.FigureHandler
             ip.addParameter('MNoiseContrast', 0.3, @(x)isnumeric(x));
             ip.addParameter('rgToLm', eye(2),      @(x)isnumeric(x) && isequal(size(x), [2,2]));
             ip.addParameter('maxToleratedClipFraction', 0.10, @(x)isnumeric(x));
+<<<<<<< HEAD
             ip.addParameter('lmDriveMode', 'mean', @(x)ischar(x)); % 'mean' or 'sum'
+=======
+            ip.addParameter('lmDriveMode', 'mean', @(x)ischar(x));
+>>>>>>> de9847a34ce72e064d664cf9e4f3ac1771a5f828
             ip.parse(varargin{:});
 
             obj.preTime        = ip.Results.preTime;
@@ -118,11 +134,19 @@ classdef LMConeNoiseTraceFigure < symphonyui.core.FigureHandler
             addHorizontalLine(axIsom, obj.meanLIsom, 'r:');
             addHorizontalLine(axIsom, obj.meanMIsom, 'g:');
             hold(axIsom, 'off');
+<<<<<<< HEAD
             title(axIsom, sprintf('%s: cones', stimType));
             ylabel(axIsom, 'Cone isom (R*/sec)');
             xlabel(axIsom, 'Time (s)');
             xlim(axIsom, [t(1), t(end)]);
             lmAll = [lIsom(:); mIsom(:); lmDelivered(:)];
+=======
+            title(axIsom, sprintf('%s: L/M cones', stimType));
+            ylabel(axIsom, 'Isom (R*/sec)');
+            xlabel(axIsom, 'Time (s)');
+            xlim(axIsom, [t(1), t(end)]);
+            lmAll = [lIsom(:); mIsom(:); lmDelivered(:); obj.meanLIsom; obj.meanMIsom];
+>>>>>>> de9847a34ce72e064d664cf9e4f3ac1771a5f828
             yPad = max(1000, 0.05 * (max(lmAll) - min(lmAll)));
             ylim(axIsom, [min(lmAll) - yPad, max(lmAll) + yPad]);
             legend(axIsom, {'L intended','M intended','L delivered','M delivered','L mean','M mean'}, 'Location', 'best');
