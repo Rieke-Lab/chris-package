@@ -70,16 +70,34 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
             obj.showFigure('edu.washington.riekelab.chris.figures.FrameTimingFigure',...
                 obj.rig.getDevice('Stage'), obj.rig.getDevice('Frame Monitor'));
 
-            if size(obj.stimSequence, 1) > 1
-                colors = edu.washington.riekelab.chris.utils.pmkmp(size(obj.stimSequence, 1),'CubicYF');
+            % Colour the mean-response sweeps by negative (dark-bar) contrast,
+            % so the depth of the dark bar is readable off the trace colour.
+            % MeanResponseFigure takes colours in the order groups first
+            % appear, and groups appear in stimSequence order, so row i of
+            % this matrix is the colour for stimSequence row i.
+            darkValues = obj.stimSequence(:, 3);
+            uniqueDark = unique(darkValues);                 % ascending: -1 first
+            if numel(uniqueDark) > 1
+                darkPalette = edu.washington.riekelab.chris.utils.pmkmp( ...
+                    numel(uniqueDark), 'CubicL');
             else
-                colors = [0 0 0];
+                darkPalette = [0 0 0];
+            end
+            colors = zeros(size(obj.stimSequence, 1), 3);
+            for k = 1:size(obj.stimSequence, 1)
+                colors(k, :) = darkPalette(uniqueDark == darkValues(k), :);
             end
 
             obj.showFigure('edu.washington.riekelab.chris.figures.MeanResponseFigure',...
-                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis',...
+                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
                 'groupBy',{'currentBarWidth','currentBrightContrast','currentDarkContrast','currentTemporalFrequency'},...
                 'sweepColor',colors);
+
+            % F1/F2 against negative contrast, the online counterpart of
+            % analyzeCenterContrastReversingGrating section 3.
+            obj.showFigure('edu.washington.riekelab.chris.figures.ContrastReversingHarmonicsFigure',...
+                obj.rig.getDevice(obj.amp),'recordingType',obj.onlineAnalysis,...
+                'preTime',obj.preTime,'stimTime',obj.stimTime);
         end
 
         function prepareEpoch(obj, epoch)
@@ -174,21 +192,21 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
             r = sqrt(x.^2 + y.^2);
             annulusMask = (r >= annulusInnerDiameterPix/2) & (r <= annulusOuterDiameterPix/2);
 
-            % Asymmetric contrast-reversing grating:
+            % Asymmetric contrast-reversing grating, square-wave in time.
             %
-            % Start from a symmetric sinusoid s(t) = cos(2*pi*f*t), then
-            % scale the positive half (above background) by brightBarContrast
-            % and the negative half (below background) by |darkBarContrast|.
-            % Both bars use the same asymmetric waveform, 180 deg out of phase,
-            % so both cross through background at the zero-crossings.
+            % getGratingFrame switches on sign(cos(2*pi*f*t)), so the grating
+            % only ever shows two images and each bar sits at one of its two
+            % peaks -- it does not sweep through background. Written as the
+            % waveform the display actually produces, for one set of bars:
             %
-            % For bright bars (phase = 0, using s = cos):
-            %   s >= 0: intensity = background * (1 + brightBarContrast * s)
-            %   s <  0: intensity = background * (1 + |darkBarContrast| * s)
+            %   cos >= 0: intensity = background * (1 + brightBarContrast)
+            %   cos <  0: intensity = background * (1 - |darkBarContrast|)
             %
-            % For dark bars (phase = 180, using -s):
-            %   s >= 0: intensity = background * (1 - |darkBarContrast| * s)
-            %   s <  0: intensity = background * (1 - brightBarContrast * s)
+            % The other set of bars is the same waveform a half cycle later, so
+            % at any instant one set is at its bright peak while the other is at
+            % its dark trough. The asymmetry between the two peaks is the point
+            % of the protocol: a linear receptive field cancels the two bars
+            % only at the dark contrast that balances the bright one.
 
             % Mean image: background everywhere
             obj.meanImage = obj.backgroundIntensity * ones(size(grating));
@@ -210,8 +228,14 @@ classdef spotWithAnnularContrastReversingGrating < edu.washington.riekelab.proto
         end
 
         function imgMat = getGratingFrame(obj, time)
+            % time is measured from stimulus onset, so cos = 1 at t = 0 and the
+            % first half cycle must be gratingImage -- bright bars at the bright
+            % peak, which is what gratingImage was built to be. The test was
+            % inverted, which put the stimulus a half cycle out of phase with
+            % its own definition and flipped the sign of the half-cycle
+            % difference the offline analysis stores as resp_mean.
             s = sign(cos(2 * pi * obj.currentTemporalFrequency * time));
-            if (s < 0)
+            if (s >= 0)
                 imgMat = obj.gratingImage;
             else
                 imgMat = obj.gratingImageInv;
