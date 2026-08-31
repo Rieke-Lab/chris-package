@@ -18,32 +18,51 @@ classdef LedFullFieldSinusoidSensitivity < edu.washington.riekelab.protocols.Rie
     properties (Hidden)
         ledType
         ampType
-        temporalFrequenciesType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
-        sinusoidContrastsType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
-        lightMeansType = symphonyui.core.PropertyType('denserealdouble', 'matrix')
-        onlineAnalysisType = symphonyui.core.PropertyType('char', 'row', ...
+
+        temporalFrequenciesType = ...
+            symphonyui.core.PropertyType('denserealdouble', 'matrix')
+
+        sinusoidContrastsType = ...
+            symphonyui.core.PropertyType('denserealdouble', 'matrix')
+
+        lightMeansType = ...
+            symphonyui.core.PropertyType('denserealdouble', 'matrix')
+
+        onlineAnalysisType = ...
+            symphonyui.core.PropertyType('char', 'row', ...
             {'none', 'extracellular', 'exc', 'inh'})
+
         stimulusSequence
         currentTemporalFrequency
         currentSinusoidContrast
         currentLightMean
     end
 
+
     methods
 
         function didSetRig(obj)
             didSetRig@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
-            [obj.led, obj.ledType] = obj.createDeviceNamesProperty('LED');
-            [obj.amp, obj.ampType] = obj.createDeviceNamesProperty('Amp');
+
+            [obj.led, obj.ledType] = ...
+                obj.createDeviceNamesProperty('LED');
+
+            [obj.amp, obj.ampType] = ...
+                obj.createDeviceNamesProperty('Amp');
         end
+
 
         function prepareRun(obj)
             prepareRun@edu.washington.riekelab.protocols.RiekeLabProtocol(obj);
+
             obj.validateParameters();
+
             obj.stimulusSequence = obj.makeStimulusSequence();
 
-            obj.showFigure('symphonyui.builtin.figures.ResponseFigure', ...
+            obj.showFigure( ...
+                'symphonyui.builtin.figures.ResponseFigure', ...
                 obj.rig.getDevice(obj.amp));
+
             if ~strcmp(obj.onlineAnalysis, 'none')
                 obj.showFigure( ...
                     'edu.washington.riekelab.chris.figures.LedSinusoidCycleAverageFigure', ...
@@ -55,116 +74,242 @@ classdef LedFullFieldSinusoidSensitivity < edu.washington.riekelab.protocols.Rie
             end
 
             device = obj.rig.getDevice(obj.led);
+
             device.background = symphonyui.core.Measurement( ...
-                obj.lightMeans(1), device.background.displayUnits);
+                obj.lightMeans(1), ...
+                device.background.displayUnits);
         end
 
+
         function prepareEpoch(obj, epoch)
-            prepareEpoch@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, epoch);
-            condition = obj.stimulusSequence(obj.numEpochsPrepared + 1, :);
+            prepareEpoch@edu.washington.riekelab.protocols.RiekeLabProtocol( ...
+                obj, epoch);
+
+            % numEpochsPrepared has already been incremented by the
+            % superclass prepareEpoch method.
+            epochIndex = obj.numEpochsPrepared;
+
+            % Safety check to catch bookkeeping errors explicitly.
+            if epochIndex < 1 || ...
+                    epochIndex > size(obj.stimulusSequence, 1)
+
+                error( ...
+                    'Epoch index %d exceeds stimulusSequence length %d.', ...
+                    epochIndex, ...
+                    size(obj.stimulusSequence, 1));
+            end
+
+            condition = obj.stimulusSequence(epochIndex, :);
+
             obj.currentLightMean = condition(1);
             obj.currentSinusoidContrast = condition(2);
             obj.currentTemporalFrequency = condition(3);
 
-            epoch.addStimulus(obj.rig.getDevice(obj.led), obj.createLedStimulus());
-            epoch.addResponse(obj.rig.getDevice(obj.amp));
-            epoch.addParameter('currentLightMean', obj.currentLightMean);
-            epoch.addParameter('currentSinusoidContrast', obj.currentSinusoidContrast);
-            epoch.addParameter('currentTemporalFrequency', obj.currentTemporalFrequency);
+            epoch.addStimulus( ...
+                obj.rig.getDevice(obj.led), ...
+                obj.createLedStimulus());
+
+            epoch.addResponse( ...
+                obj.rig.getDevice(obj.amp));
+
+            epoch.addParameter( ...
+                'currentLightMean', ...
+                obj.currentLightMean);
+
+            epoch.addParameter( ...
+                'currentSinusoidContrast', ...
+                obj.currentSinusoidContrast);
+
+            epoch.addParameter( ...
+                'currentTemporalFrequency', ...
+                obj.currentTemporalFrequency);
         end
+
 
         function prepareInterval(obj, interval)
-            prepareInterval@edu.washington.riekelab.protocols.RiekeLabProtocol(obj, interval);
+            prepareInterval@edu.washington.riekelab.protocols.RiekeLabProtocol( ...
+                obj, interval);
+
             device = obj.rig.getDevice(obj.led);
+
             background = symphonyui.core.Measurement( ...
-                obj.currentLightMean, device.background.displayUnits);
+                obj.currentLightMean, ...
+                device.background.displayUnits);
+
             interval.addDirectCurrentStimulus( ...
-                device, background, obj.interpulseInterval, obj.sampleRate);
+                device, ...
+                background, ...
+                obj.interpulseInterval, ...
+                obj.sampleRate);
         end
+
 
         function tf = shouldContinuePreparingEpochs(obj)
-            tf = obj.numEpochsPrepared < size(obj.stimulusSequence, 1);
+            tf = obj.numEpochsPrepared < ...
+                size(obj.stimulusSequence, 1);
         end
 
+
         function tf = shouldContinueRun(obj)
-            tf = obj.numEpochsCompleted < size(obj.stimulusSequence, 1);
+            tf = obj.numEpochsCompleted < ...
+                size(obj.stimulusSequence, 1);
         end
 
     end
+
 
     methods (Access = private)
 
         function stim = createLedStimulus(obj)
+
             device = obj.rig.getDevice(obj.led);
-            gen = edu.washington.riekelab.chris.stimuli.SinusoidPlusNoiseGenerator();
+
+            gen = ...
+                edu.washington.riekelab.chris.stimuli.SinusoidPlusNoiseGenerator();
+
             gen.preTime = obj.preTime;
             gen.stimTime = obj.stimTime;
             gen.tailTime = obj.tailTime;
+
             gen.mean = obj.currentLightMean;
+
             gen.noiseStdv = 0;
             gen.freqCutoff = 60;
             gen.numFilters = 1;
-            gen.temporalContrast = obj.currentSinusoidContrast;
-            gen.temporalFrequency = obj.currentTemporalFrequency;
+
+            gen.temporalContrast = ...
+                obj.currentSinusoidContrast;
+
+            gen.temporalFrequency = ...
+                obj.currentTemporalFrequency;
+
             gen.seed = 0;
             gen.sampleRate = obj.sampleRate;
-            gen.units = device.background.displayUnits;
-            if strcmp(device.background.displayUnits, symphonyui.core.Measurement.NORMALIZED)
+
+            gen.units = ...
+                device.background.displayUnits;
+
+            if strcmp( ...
+                    device.background.displayUnits, ...
+                    symphonyui.core.Measurement.NORMALIZED)
+
                 gen.lowerLimit = 0;
                 gen.upperLimit = 1;
+
             else
                 gen.lowerLimit = -10.24;
                 gen.upperLimit = 10.239;
             end
+
             stim = gen.generate();
         end
 
+
         function sequence = makeStimulusSequence(obj)
+
             [means, contrasts, frequencies] = ndgrid( ...
-                obj.lightMeans(:), obj.sinusoidContrasts(:), ...
+                obj.lightMeans(:), ...
+                obj.sinusoidContrasts(:), ...
                 obj.temporalFrequencies(:));
-            conditions = [means(:), contrasts(:), frequencies(:)];
-            sequence = zeros(size(conditions, 1) * double(obj.numberOfAverages), 3);
-            n = size(conditions, 1);
-            for repeat = 1:double(obj.numberOfAverages)
-                rows = (repeat - 1) * n + (1:n);
-                sequence(rows, :) = conditions(randperm(n), :);
+
+            conditions = [ ...
+                means(:), ...
+                contrasts(:), ...
+                frequencies(:)];
+
+            nConditions = size(conditions, 1);
+            nRepeats = double(obj.numberOfAverages);
+
+            sequence = zeros( ...
+                nConditions * nRepeats, ...
+                3);
+
+            % Randomize the order of conditions independently within
+            % each repeat. Every repeat therefore contains every
+            % condition exactly once.
+            for repeat = 1:nRepeats
+
+                rows = ...
+                    (repeat - 1) * nConditions + ...
+                    (1:nConditions);
+
+                sequence(rows, :) = ...
+                    conditions(randperm(nConditions), :);
             end
         end
 
+
         function validateParameters(obj)
+
             if obj.preTime <= 0
-                error('preTime must be greater than zero for baseline subtraction.');
+                error( ...
+                    'preTime must be greater than zero for baseline subtraction.');
             end
+
             if obj.stimTime <= 0 || obj.tailTime < 0
-                error('stimTime must be positive and tailTime cannot be negative.');
+                error( ...
+                    'stimTime must be positive and tailTime cannot be negative.');
             end
-            if isempty(obj.temporalFrequencies) || any(obj.temporalFrequencies(:) <= 0)
-                error('temporalFrequencies must contain positive values.');
+
+            if isempty(obj.temporalFrequencies) || ...
+                    any(obj.temporalFrequencies(:) <= 0)
+
+                error( ...
+                    'temporalFrequencies must contain positive values.');
             end
-            if isempty(obj.sinusoidContrasts) || any(obj.sinusoidContrasts(:) < 0) || ...
+
+            if isempty(obj.sinusoidContrasts) || ...
+                    any(obj.sinusoidContrasts(:) < 0) || ...
                     any(obj.sinusoidContrasts(:) > 1)
-                error('sinusoidContrasts must contain fractions from zero to one.');
+
+                error( ...
+                    'sinusoidContrasts must contain fractions from zero to one.');
             end
-            if isempty(obj.lightMeans) || any(~isfinite(obj.lightMeans(:))) || ...
+
+            if isempty(obj.lightMeans) || ...
+                    any(~isfinite(obj.lightMeans(:))) || ...
                     any(obj.lightMeans(:) < 0)
-                error('lightMeans must contain finite, nonnegative values.');
+
+                error( ...
+                    'lightMeans must contain finite, nonnegative values.');
             end
+
             if double(obj.numberOfAverages) < 1
-                error('numberOfAverages must be at least one per condition.');
+                error( ...
+                    'numberOfAverages must be at least one per condition.');
             end
-            if obj.stimTime / 1000 * min(obj.temporalFrequencies(:)) < 1
-                error('stimTime must contain at least one cycle at every temporal frequency.');
+
+            if obj.stimTime / 1000 * ...
+                    min(obj.temporalFrequencies(:)) < 1
+
+                error( ...
+                    ['stimTime must contain at least one cycle ', ...
+                    'at every temporal frequency.']);
             end
+
             device = obj.rig.getDevice(obj.led);
-            maxima = obj.lightMeans(:) * (1 + max(obj.sinusoidContrasts(:)));
-            if strcmp(device.background.displayUnits, symphonyui.core.Measurement.NORMALIZED) && ...
+
+            maxima = ...
+                obj.lightMeans(:) * ...
+                (1 + max(obj.sinusoidContrasts(:)));
+
+            if strcmp( ...
+                    device.background.displayUnits, ...
+                    symphonyui.core.Measurement.NORMALIZED) && ...
                     any(maxima > 1)
-                error('A lightMean/contrast combination exceeds normalized LED output 1.');
+
+                error( ...
+                    ['A lightMean/contrast combination exceeds ', ...
+                    'normalized LED output 1.']);
+
             elseif any(maxima > 10.239)
-                error('A lightMean/contrast combination exceeds LED output 10.239.');
+
+                error( ...
+                    ['A lightMean/contrast combination exceeds ', ...
+                    'LED output 10.239.']);
             end
         end
 
     end
+
 end

@@ -1,6 +1,6 @@
 classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
     % Mean baseline-subtracted excitatory traces, separated by LED mean.
-
+    
     properties (SetAccess = private)
         ampDevice
         preTime
@@ -8,16 +8,16 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
         sinusoidContrasts
         temporalFrequencies
     end
-
+    
     properties (Access = private)
         axesHandles
         conditionData
         lineHandles
         contrastColors
     end
-
+    
     methods
-
+        
         function obj = LedSinusoidMeanTraceFigure(ampDevice, varargin)
             ip = inputParser();
             ip.addParameter('preTime', [], @(x)isnumeric(x) && isscalar(x));
@@ -35,7 +35,7 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             obj.contrastColors = obj.makeColors(numel(obj.sinusoidContrasts));
             obj.createUi();
         end
-
+        
         function createUi(obj)
             n = numel(obj.lightMeans);
             obj.axesHandles = gobjects(1, n);
@@ -48,7 +48,7 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             end
             set(obj.figureHandle, 'Name', 'LED sinusoid mean traces');
         end
-
+        
         function clear(obj)
             for i = 1:numel(obj.axesHandles)
                 cla(obj.axesHandles(i));
@@ -57,7 +57,7 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             obj.conditionData = containers.Map();
             obj.lineHandles = containers.Map();
         end
-
+        
         function handleEpoch(obj, epoch)
             response = epoch.getResponse(obj.ampDevice);
             trace = double(response.getData());
@@ -70,7 +70,7 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
                 warning('No preTime samples are available; skipping epoch.');
                 return;
             end
-
+            
             % Subtract the pre-stimulus baseline and flip excitation so inward
             % current is plotted upward.
             trace = -(trace - mean(trace(1:prePts)));
@@ -94,34 +94,82 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             obj.conditionData(key) = datum;
             obj.redrawCondition(key);
         end
-
+        
     end
-
+    
     methods (Access = private)
-
+        
         function redrawCondition(obj, key)
+            
             datum = obj.conditionData(key);
-            meanIndex = find(abs(obj.lightMeans - datum.lightMean) < 1e-12, 1);
-            contrastIndex = find(abs(obj.sinusoidContrasts - datum.contrast) < 1e-12, 1);
+            
+            meanIndex = find( ...
+                abs(obj.lightMeans - datum.lightMean) < 1e-12, 1);
+            
+            contrastIndex = find( ...
+                abs(obj.sinusoidContrasts - datum.contrast) < 1e-12, 1);
+            
             if isempty(meanIndex) || isempty(contrastIndex)
                 return;
             end
+            
             x = (0:numel(datum.meanTrace)-1) / datum.sampleRate;
-            label = sprintf('C=%g, f=%g Hz (n=%d)', ...
-                datum.contrast, datum.frequency, datum.count);
+            
+            label = sprintf( ...
+                'C=%g, f=%g Hz (n=%d)', ...
+                datum.contrast, ...
+                datum.frequency, ...
+                datum.count);
+            
             if isKey(obj.lineHandles, key)
-                set(obj.lineHandles(key), 'YData', datum.meanTrace, ...
+                
+                set(obj.lineHandles(key), ...
+                    'YData', datum.meanTrace, ...
                     'DisplayName', label);
+                
             else
-                obj.lineHandles(key) = line(x, datum.meanTrace, ...
+                
+                obj.lineHandles(key) = line( ...
+                    x, datum.meanTrace, ...
                     'Parent', obj.axesHandles(meanIndex), ...
                     'Color', obj.contrastColors(contrastIndex, :), ...
                     'LineStyle', obj.frequencyLineStyle(datum.frequency), ...
-                    'LineWidth', 1.25, 'DisplayName', label);
+                    'LineWidth', 1.25, ...
+                    'DisplayName', label);
             end
-            legend(obj.axesHandles(meanIndex), 'show', 'Location', 'best');
+            
+            % Explicitly rebuild legend so newly added contrasts appear.
+            legendHandles = gobjects(0);
+            legendLabels = {};
+            
+            for contrastIndex = 1:numel(obj.sinusoidContrasts)
+                
+                for frequencyIndex = 1:numel(obj.temporalFrequencies)
+                    
+                    conditionKey = obj.conditionKey( ...
+                        obj.lightMeans(meanIndex), ...
+                        obj.sinusoidContrasts(contrastIndex), ...
+                        obj.temporalFrequencies(frequencyIndex));
+                    
+                    if isKey(obj.lineHandles, conditionKey)
+                        
+                        h = obj.lineHandles(conditionKey);
+                        
+                        legendHandles(end+1) = h;
+                        legendLabels{end+1} = get(h, 'DisplayName');
+                    end
+                end
+            end
+            
+            if ~isempty(legendHandles)
+                legend( ...
+                    obj.axesHandles(meanIndex), ...
+                    legendHandles, ...
+                    legendLabels, ...
+                    'Location', 'best');
+            end
         end
-
+        
         function style = frequencyLineStyle(obj, frequency)
             styles = {'-', '--', ':', '-.'};
             index = find(abs(obj.temporalFrequencies - frequency) < 1e-12, 1);
@@ -130,11 +178,11 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             end
             style = styles{mod(index - 1, numel(styles)) + 1};
         end
-
+        
     end
-
+    
     methods (Static, Access = private)
-
+        
         function colors = makeColors(n)
             if n <= 1
                 colors = [0 0 0];
@@ -142,10 +190,10 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
                 colors = edu.washington.riekelab.chris.utils.pmkmp(n, 'CubicL');
             end
         end
-
+        
         function key = conditionKey(lightMean, contrast, frequency)
             key = sprintf('m%.12g_c%.12g_f%.12g', lightMean, contrast, frequency);
         end
-
+        
     end
 end
