@@ -8,6 +8,7 @@ classdef LedSinusoidIncrementDecrementFigure < symphonyui.core.FigureHandler
         lightMeans
         sinusoidContrasts
         temporalFrequencies
+        stimulusLabel
     end
 
     properties (Access = private)
@@ -37,6 +38,9 @@ classdef LedSinusoidIncrementDecrementFigure < symphonyui.core.FigureHandler
 
             ip.addParameter('temporalFrequencies', [], @isnumeric);
 
+            ip.addParameter('stimulusLabel', 'LED', ...
+                @(x)ischar(x) || (isstring(x) && isscalar(x)));
+
             ip.parse(varargin{:});
 
             obj.ampDevice = ampDevice;
@@ -45,6 +49,7 @@ classdef LedSinusoidIncrementDecrementFigure < symphonyui.core.FigureHandler
             obj.lightMeans = ip.Results.lightMeans(:)';
             obj.sinusoidContrasts = ip.Results.sinusoidContrasts(:)';
             obj.temporalFrequencies = ip.Results.temporalFrequencies(:)';
+            obj.stimulusLabel = char(ip.Results.stimulusLabel);
 
             obj.conditionData = containers.Map();
             obj.cycleLines = containers.Map();
@@ -106,7 +111,8 @@ classdef LedSinusoidIncrementDecrementFigure < symphonyui.core.FigureHandler
 
             set(obj.figureHandle, ...
                 'Name', ...
-                'LED sinusoid outward/inward analysis');
+                sprintf('%s sinusoid outward/inward analysis', ...
+                obj.stimulusLabel));
         end
 
 

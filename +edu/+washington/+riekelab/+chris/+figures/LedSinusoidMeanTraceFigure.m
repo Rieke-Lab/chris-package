@@ -7,6 +7,7 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
         lightMeans
         sinusoidContrasts
         temporalFrequencies
+        stimulusLabel
     end
     
     properties (Access = private)
@@ -24,12 +25,15 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
             ip.addParameter('lightMeans', [], @isnumeric);
             ip.addParameter('sinusoidContrasts', [], @isnumeric);
             ip.addParameter('temporalFrequencies', [], @isnumeric);
+            ip.addParameter('stimulusLabel', 'LED', ...
+                @(x)ischar(x) || (isstring(x) && isscalar(x)));
             ip.parse(varargin{:});
             obj.ampDevice = ampDevice;
             obj.preTime = ip.Results.preTime;
             obj.lightMeans = ip.Results.lightMeans(:)';
             obj.sinusoidContrasts = ip.Results.sinusoidContrasts(:)';
             obj.temporalFrequencies = ip.Results.temporalFrequencies(:)';
+            obj.stimulusLabel = char(ip.Results.stimulusLabel);
             obj.conditionData = containers.Map();
             obj.lineHandles = containers.Map();
             obj.contrastColors = obj.makeColors(numel(obj.sinusoidContrasts));
@@ -44,9 +48,11 @@ classdef LedSinusoidMeanTraceFigure < symphonyui.core.FigureHandler
                 hold(obj.axesHandles(i), 'on');
                 xlabel(obj.axesHandles(i), 'time (s)');
                 ylabel(obj.axesHandles(i), 'excitatory current (-pA)');
-                title(obj.axesHandles(i), sprintf('LED mean = %g', obj.lightMeans(i)));
+                title(obj.axesHandles(i), sprintf('%s mean = %g', ...
+                    obj.stimulusLabel, obj.lightMeans(i)));
             end
-            set(obj.figureHandle, 'Name', 'LED sinusoid mean traces');
+            set(obj.figureHandle, 'Name', sprintf('%s sinusoid mean traces', ...
+                obj.stimulusLabel));
         end
         
         function clear(obj)
