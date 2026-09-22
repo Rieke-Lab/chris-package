@@ -48,3 +48,19 @@ assertSuccess(results);
 These check all 20 bundled images, identity and zero scaling, mean preservation,
 contrast reduction, invalid scalar rejection, and pair/triplet sequencing.
 Symphony/Stage presentation and acquisition still require validation on the rig.
+
+### Annulus variant
+
+`edu.washington.riekelab.chris.protocols.LinearEquivalentAnnulusContrastScalor`
+adds the same scalar/matrix control to `LinearEquivalentAnnulus`, which remains
+unchanged. Both equivalent intensities integrate the scaled image over
+`annulusInnerDiameter` to `annulusOuterDiameter`, using `rfSigmaSurround` for
+Gaussian weighting. The annulus geometry, timing, and center flash retain the
+original behavior; `centerSpotContrast` controls the center flash independently
+of `contrastScalor`. Thus at scalar 0 the annulus is uniform mean intensity, but
+the center flash can still be present.
+
+The annulus version keeps the original `lin cone intensity` epoch tag for the
+cone-linearized condition. It shares the scalar-aware plots (labeled as annuli),
+epoch metadata, and pair/triplet scheduling described above. Its default
+`numberOfAverages` remains 90 total epochs.

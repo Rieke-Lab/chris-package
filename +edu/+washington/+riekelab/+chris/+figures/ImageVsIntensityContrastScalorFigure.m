@@ -6,6 +6,7 @@ classdef ImageVsIntensityContrastScalorFigure < symphonyui.core.FigureHandler
         preTime
         stimTime
         contrastScalor
+        equivalentStimulus
     end
 
     properties (Access = private)
@@ -28,8 +29,10 @@ classdef ImageVsIntensityContrastScalorFigure < symphonyui.core.FigureHandler
             ip.addParameter('preTime', [], @(x)isnumeric(x) && isscalar(x));
             ip.addParameter('stimTime', [], @(x)isnumeric(x) && isscalar(x));
             ip.addParameter('contrastScalor', 1, @(x)isnumeric(x) && ~isempty(x));
+            ip.addParameter('equivalentStimulus', 'disc', @(x)ischar(x) && isrow(x));
             ip.parse(varargin{:});
 
+            obj.equivalentStimulus = ip.Results.equivalentStimulus;
             obj.recordingType = ip.Results.recordingType;
             obj.preTime = ip.Results.preTime;
             obj.stimTime = ip.Results.stimTime;
@@ -49,8 +52,8 @@ classdef ImageVsIntensityContrastScalorFigure < symphonyui.core.FigureHandler
                 'FontSize', get(obj.figureHandle, 'DefaultUicontrolFontSize'), ...
                 'XTickMode', 'auto');
             xlabel(obj.axesHandle, 'Response to image');
-            ylabel(obj.axesHandle, 'Response to equivalent disc');
-            title(obj.axesHandle, 'Image vs standard/cone-linearized equivalent disc');
+            ylabel(obj.axesHandle, ['Response to equivalent ' obj.equivalentStimulus]);
+            title(obj.axesHandle, ['Image vs standard/cone-linearized equivalent ' obj.equivalentStimulus]);
             hold(obj.axesHandle, 'on');
             axis(obj.axesHandle, 'square');
         end
@@ -93,7 +96,7 @@ classdef ImageVsIntensityContrastScalorFigure < symphonyui.core.FigureHandler
                     obj.patchData.(fieldName).image(end+1) = newEpochResponse;
                 case 'intensity'
                     obj.patchData.(fieldName).intensity(end+1) = newEpochResponse;
-                case 'linConeIntensity'
+                case {'linConeIntensity', 'lin cone intensity'}
                     obj.patchData.(fieldName).linConeIntensity(end+1) = newEpochResponse;
                 otherwise
                     error('Unknown stimulusTag: %s', stimulusTag);
